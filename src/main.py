@@ -288,7 +288,7 @@ async def cmd_collect(config: dict, feeds: dict, dry_run: bool):
         await db.close()
 
 
-async def cmd_report_daily(config: dict, dry_run: bool):
+async def cmd_report_daily(config: dict, dry_run: bool, lang: str = "en"):
     """Generate daily PDF report → output/daily/."""
     db = Database(config["storage"]["db_path"])
     await db.initialize()
@@ -301,9 +301,9 @@ async def cmd_report_daily(config: dict, dry_run: bool):
             return
 
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        generator = ReportGenerator(config)
+        generator = ReportGenerator(config, lang=lang)
         pdf_path = generator.generate(items, date_str=today)
-        console.print(f"[green]日报 PDF 已生成: {pdf_path}[/green]")
+        console.print(f"[green]Daily PDF generated: {pdf_path}[/green]")
 
         item_ids = [item["id"] for item in items]
         await db.mark_items_digested(item_ids)
@@ -311,12 +311,8 @@ async def cmd_report_daily(config: dict, dry_run: bool):
         await db.close()
 
 
-async def cmd_report_weekly(config: dict, top_n: int = 100):
-    """Generate weekly PDF report → output/weekly/.
-
-    Args:
-        top_n: Max items in PDF (sorted by score). 0 = unlimited.
-    """
+async def cmd_report_weekly(config: dict, top_n: int = 100, lang: str = "en"):
+    """Generate weekly PDF report → output/weekly/."""
     db = Database(config["storage"]["db_path"])
     await db.initialize()
 
@@ -339,9 +335,9 @@ async def cmd_report_weekly(config: dict, top_n: int = 100):
         else:
             items = all_items
 
-        generator = WeeklyReportGenerator(config)
+        generator = WeeklyReportGenerator(config, lang=lang)
         pdf_path = generator.generate(items, week_start, week_end)
-        console.print(f"[green]周报 PDF 已生成: {pdf_path}[/green]")
+        console.print(f"[green]Weekly PDF generated: {pdf_path}[/green]")
     finally:
         await db.close()
 
@@ -606,6 +602,8 @@ def main():
     parser.add_argument("target", nargs="?",
                         help="daily|weekly for report/send; all for rescore; source/channel name for test-*")
     parser.add_argument("--dry-run", action="store_true", help="Skip LLM calls and notifications")
+    parser.add_argument("--lang", choices=["en", "zh"], default="en",
+                        help="Report language (default: en)")
     parser.add_argument("--top", type=int, default=100,
                         help="Max items in weekly PDF (default: 100, 0 = unlimited)")
     parser.add_argument("--config", default=str(BASE_DIR / "config" / "config.yaml"))
@@ -633,9 +631,9 @@ def main():
         elif args.command == "report":
             target = (args.target or "daily").lower()
             if target == "daily":
-                asyncio.run(cmd_report_daily(config, args.dry_run))
+                asyncio.run(cmd_report_daily(config, args.dry_run, lang=args.lang))
             elif target == "weekly":
-                asyncio.run(cmd_report_weekly(config, top_n=args.top))
+                asyncio.run(cmd_report_weekly(config, top_n=args.top, lang=args.lang))
             else:
                 console.print(f"[red]Unknown report type: {target}. Use 'daily' or 'weekly'[/red]")
 

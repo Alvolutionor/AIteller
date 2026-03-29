@@ -1,5 +1,5 @@
 # src/report/generator.py
-"""Generate well-formatted Chinese PDF reports for WeChat distribution."""
+"""Generate well-formatted PDF reports with i18n support."""
 
 import json
 import logging
@@ -9,27 +9,9 @@ from pathlib import Path
 
 from fpdf import FPDF
 
+from src.report.i18n import get_strings
+
 logger = logging.getLogger(__name__)
-
-# Source name mapping to Chinese
-SOURCE_ZH = {
-    "hackernews": "Hacker News",
-    "reddit": "Reddit",
-    "github_trending": "GitHub 趋势",
-    "arxiv": "arXiv 论文",
-    "youtube": "YouTube",
-    "bilibili": "B站",
-    "twitter": "Twitter/X",
-    "rss_blogs": "技术博客",
-}
-
-# Score tier labels (calibrated for 0-10 scoring range)
-TIER_LABELS = {
-    5: ("必读", (220, 53, 69)),     # red
-    4: ("精选", (255, 152, 0)),     # orange
-    3: ("推荐", (76, 175, 80)),     # green
-    2: ("参考", (158, 158, 158)),   # grey
-}
 
 
 def _get_tier(score: float) -> int:
@@ -43,22 +25,21 @@ def _get_tier(score: float) -> int:
 
 
 class ReportPDF(FPDF):
-    """PDF with Chinese font support and AIteller styling."""
+    """PDF with CJK font support and AIteller styling."""
 
-    def __init__(self):
+    def __init__(self, lang: str = "en"):
         super().__init__()
+        self.lang = lang
+        self._s = get_strings(lang)
         self._zh = self._setup_fonts()
         self.set_auto_page_break(auto=True, margin=20)
 
     def _setup_fonts(self) -> str:
-        """Load Chinese fonts. Returns font family name."""
-        # Preference order: SimHei (simpler .ttf), then Microsoft YaHei (.ttc)
+        """Load CJK fonts. Returns font family name."""
         candidates = [
             ("C:/Windows/Fonts/simhei.ttf", "C:/Windows/Fonts/simhei.ttf"),
             ("C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/msyhbd.ttc"),
-            # macOS
             ("/System/Library/Fonts/PingFang.ttc", "/System/Library/Fonts/PingFang.ttc"),
-            # Linux
             ("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
              "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
         ]
@@ -71,18 +52,15 @@ class ReportPDF(FPDF):
                 except Exception as e:
                     logger.warning("Failed to load font %s: %s", regular, e)
                     continue
-        raise RuntimeError(
-            "未找到中文字体。请确保系统安装了 SimHei 或 Microsoft YaHei 字体。"
-        )
+        raise RuntimeError(self._s["font_error"])
 
     def header(self):
         if self.page_no() == 1:
-            return  # Title page has custom header
+            return
         self.set_font(self._zh, "B", 9)
         self.set_text_color(150, 150, 150)
-        self.cell(0, 8, "AI 实践日报 — AIteller", align="L")
+        self.cell(0, 8, self._s["daily_header"], align="L")
         self.ln(10)
-        # Separator line
         self.set_draw_color(200, 200, 200)
         self.line(10, self.get_y(), self.w - 10, self.get_y())
         self.ln(4)
@@ -91,25 +69,27 @@ class ReportPDF(FPDF):
         self.set_y(-15)
         self.set_font(self._zh, "", 8)
         self.set_text_color(160, 160, 160)
-        self.cell(0, 10, f"第 {self.page_no()} 页  |  由 AIteller 自动生成", align="C")
+        self.cell(0, 10, self._s["page_footer"].format(page=self.page_no()), align="C")
 
 
 class ReportGenerator:
     """Generate PDF digest reports."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, lang: str = "en"):
         self.config = config
+        self.lang = lang
+        self._s = get_strings(lang)
         self.output_dir = Path(
             config.get("output", {}).get("daily_dir", "./output/daily")
         )
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def generate(self, items: list[dict], date_str: str = None) -> Path:
-        """Generate PDF report from processed items. Returns file path."""
         if not date_str:
             date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-        pdf = ReportPDF()
+        s = self._s
+        pdf = ReportPDF(lang=self.lang)
         zh = pdf._zh
 
         # --- Title Page ---
@@ -117,14 +97,13 @@ class ReportGenerator:
         pdf.ln(50)
         pdf.set_font(zh, "B", 32)
         pdf.set_text_color(33, 33, 33)
-        pdf.cell(0, 16, "AI 实践日报", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 16, s["daily_title"], align="C", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(6)
         pdf.set_font(zh, "", 16)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(0, 10, date_str, align="C", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(12)
 
-        # Stats summary
         total = len(items)
         sources = set(item.get("source", "") for item in items)
         highlights = [i for i in items if i.get("score_total", 0) >= 3.5]
@@ -132,30 +111,30 @@ class ReportGenerator:
         pdf.set_text_color(80, 80, 80)
         pdf.cell(
             0, 8,
-            f"共收录 {total} 篇内容  |  {len(sources)} 个来源  |  {len(highlights)} 篇精选",
+            s["daily_stats"].format(total=total, sources=len(sources), highlights=len(highlights)),
             align="C", new_x="LMARGIN", new_y="NEXT",
         )
         pdf.ln(20)
 
-        # Source breakdown
         source_counts = {}
         for item in items:
             src = item.get("source", "unknown")
             source_counts[src] = source_counts.get(src, 0) + 1
         pdf.set_font(zh, "", 10)
         pdf.set_text_color(120, 120, 120)
+        unit = s["daily_source_unit"]
+        src_names = s["sources"]
         parts = [
-            f"{SOURCE_ZH.get(src, src)} {cnt}篇"
+            f"{src_names.get(src, src)} {cnt}{unit}"
             for src, cnt in sorted(source_counts.items(), key=lambda x: -x[1])
         ]
-        pdf.cell(0, 8, "来源：" + "  |  ".join(parts), align="C",
+        pdf.cell(0, 8, s["daily_source_prefix"] + "  |  ".join(parts), align="C",
                  new_x="LMARGIN", new_y="NEXT")
 
         # --- Content Pages ---
-        # Sort by score descending
         sorted_items = sorted(items, key=lambda x: x.get("score_total", 0), reverse=True)
+        tier_labels = s["tier_daily"]
 
-        # Group by tier
         tiers = {}
         for item in sorted_items:
             tier = _get_tier(item.get("score_total", 0))
@@ -165,38 +144,29 @@ class ReportGenerator:
             tier_items = tiers.get(tier_level, [])
             if not tier_items:
                 continue
-
-            label, color = TIER_LABELS[tier_level]
+            label, color = tier_labels[tier_level]
             pdf.add_page()
-            self._render_section_header(pdf, zh, f"{label}（{len(tier_items)} 篇）", color)
-
+            header_text = f"{label} ({len(tier_items)})"
+            self._render_section_header(pdf, zh, header_text, color)
             for item in tier_items:
-                self._render_item(pdf, zh, item)
+                self._render_item(pdf, zh, item, s)
 
         # --- Footer Page ---
         pdf.add_page()
         pdf.ln(40)
         pdf.set_font(zh, "", 11)
         pdf.set_text_color(130, 130, 130)
-        pdf.cell(0, 8, "以上内容由 AIteller 自动收集、评分和摘要生成。", align="C",
-                 new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 8, "信息来源包括 Hacker News、Reddit、GitHub、arXiv、YouTube、B站 等。",
-                 align="C", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 8, "如有疑问请以原文链接为准。", align="C",
-                 new_x="LMARGIN", new_y="NEXT")
+        for line in [s["daily_footer_1"], s["daily_footer_2"], s["daily_footer_3"]]:
+            pdf.cell(0, 8, line, align="C", new_x="LMARGIN", new_y="NEXT")
 
-        # Save
-        filename = f"AI实践日报_{date_str}.pdf"
+        filename = s["daily_filename"].format(date=date_str)
         filepath = self.output_dir / filename
         pdf.output(str(filepath))
         logger.info("Report generated: %s (%d items)", filepath, total)
         return filepath
 
-    def _render_section_header(self, pdf: ReportPDF, zh: str,
-                               title: str, color: tuple):
-        """Render a colored section header."""
+    def _render_section_header(self, pdf, zh, title, color):
         r, g, b = color
-        # Colored bar
         pdf.set_fill_color(r, g, b)
         pdf.rect(10, pdf.get_y(), 4, 12, style="F")
         pdf.set_x(18)
@@ -204,32 +174,31 @@ class ReportGenerator:
         pdf.set_text_color(r, g, b)
         pdf.cell(0, 12, title, new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
-        # Thin separator
         pdf.set_draw_color(220, 220, 220)
         pdf.line(10, pdf.get_y(), pdf.w - 10, pdf.get_y())
         pdf.ln(6)
 
-    def _render_item(self, pdf: ReportPDF, zh: str, item: dict):
-        """Render a single item entry with clickable links."""
+    def _render_item(self, pdf, zh, item, s):
         if pdf.get_y() > pdf.h - 55:
             pdf.add_page()
 
         score = item.get("score_total", 0)
         tier = _get_tier(score)
-        _, color = TIER_LABELS[tier]
-        source = SOURCE_ZH.get(item.get("source", ""), item.get("source", ""))
-        title = item.get("title", "无标题")
+        _, color = s["tier_daily"][tier]
+        source = s["sources"].get(item.get("source", ""), item.get("source", ""))
+        title = item.get("title", s["no_title"])
         url = item.get("url", "")
 
-        # Parse summary JSON for Chinese title
+        # Parse summary JSON
         summary_raw = item.get("summary", "")
         summary = ""
+        title_key = "title_en" if self.lang == "en" else "title_zh"
         if isinstance(summary_raw, str):
             try:
-                s = json.loads(summary_raw)
-                if isinstance(s, dict):
-                    title = s.get("title_zh", title) or title
-                    summary = s.get("summary", "")
+                obj = json.loads(summary_raw)
+                if isinstance(obj, dict):
+                    title = obj.get(title_key, obj.get("title_zh", title)) or title
+                    summary = obj.get("summary", "")
                 else:
                     summary = summary_raw
             except (json.JSONDecodeError, TypeError):
@@ -247,26 +216,24 @@ class ReportGenerator:
         src_w = pdf.get_string_width(f"[{source}]") + 2
         pdf.cell(src_w, 7, f"[{source}]")
 
-        # Title — clickable
+        # Title
         pdf.set_font(zh, "B", 11)
         remaining_w = pdf.w - pdf.get_x() - 10
         if url:
             pdf.set_text_color(20, 60, 120)
-            pdf.multi_cell(remaining_w, 7, title, new_x="LMARGIN", new_y="NEXT",
-                           link=url)
+            pdf.multi_cell(remaining_w, 7, title, new_x="LMARGIN", new_y="NEXT", link=url)
         else:
             pdf.set_text_color(33, 33, 33)
             pdf.multi_cell(remaining_w, 7, title, new_x="LMARGIN", new_y="NEXT")
 
-        # Metadata line
+        # Metadata
         author = item.get("author", "")
         pub_date = item.get("published_at", "")
         meta_parts = []
         if author:
-            meta_parts.append(f"作者: {author}")
+            meta_parts.append(f"{s['author']} {author}")
         if pub_date:
             meta_parts.append(str(pub_date)[:10])
-        # Parse metadata for engagement
         metadata = item.get("metadata", "")
         if isinstance(metadata, str):
             try:
@@ -275,10 +242,10 @@ class ReportGenerator:
                 metadata = {}
         views = metadata.get("views") or metadata.get("play") or metadata.get("view_count")
         if views:
-            meta_parts.append(f"浏览 {views}")
+            meta_parts.append(f"{views} {s['views']}")
         likes = metadata.get("likes") or metadata.get("like_count")
         if likes:
-            meta_parts.append(f"点赞 {likes}")
+            meta_parts.append(f"{likes} {s['likes']}")
 
         if meta_parts:
             pdf.set_font(zh, "", 8)
@@ -286,7 +253,6 @@ class ReportGenerator:
             pdf.set_x(18)
             pdf.cell(0, 5, "  |  ".join(meta_parts), new_x="LMARGIN", new_y="NEXT")
 
-        # Summary
         if summary:
             pdf.set_font(zh, "", 9)
             pdf.set_text_color(80, 80, 80)
@@ -294,7 +260,6 @@ class ReportGenerator:
             display = summary[:400] + "..." if len(summary) > 400 else summary
             pdf.multi_cell(pdf.w - 28, 6, display, new_x="LMARGIN", new_y="NEXT")
 
-        # Clickable URL
         if url:
             pdf.set_font(zh, "", 7)
             pdf.set_text_color(70, 130, 180)
@@ -302,7 +267,6 @@ class ReportGenerator:
             display_url = url if len(url) <= 90 else url[:87] + "..."
             pdf.cell(0, 5, display_url, new_x="LMARGIN", new_y="NEXT", link=url)
 
-        # Separator
         pdf.ln(4)
         pdf.set_draw_color(235, 235, 235)
         pdf.line(18, pdf.get_y(), pdf.w - 18, pdf.get_y())

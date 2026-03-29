@@ -13,32 +13,9 @@ from pathlib import Path
 from fpdf import FPDF
 
 from src.prompts.filter import CATEGORIES, CATEGORY_IDS, TIER_MAP
+from src.report.i18n import get_strings, get_category_name
 
 logger = logging.getLogger(__name__)
-
-SOURCE_DISPLAY = {
-    "hackernews": "Hacker News",
-    "reddit": "Reddit",
-    "github_trending": "GitHub",
-    "arxiv": "arXiv",
-    "youtube": "YouTube",
-    "bilibili": "B站",
-    "twitter": "Twitter/X",
-    "rss_blogs": "技术博客",
-    "hf_papers": "HF Papers",
-}
-
-SOURCE_ALIAS = {
-    "hackernews": "HN",
-    "reddit": "Reddit",
-    "github_trending": "GitHub",
-    "arxiv": "arXiv",
-    "youtube": "YT",
-    "bilibili": "B站",
-    "twitter": "X",
-    "rss_blogs": "博客",
-    "hf_papers": "HF",
-}
 
 SOURCE_REPORT_HEADER = {
     "hackernews": "HackerNews",
@@ -64,12 +41,8 @@ SOURCE_ORDER = [
     "hf_papers",
 ]
 
-TIER_LABELS = {
-    1: ("Tier 1 · 实践经验", (183, 28, 28), (254, 242, 242)),
-    2: ("Tier 2 · 技术深度", (194, 65, 12), (255, 247, 237)),
-    3: ("Tier 3 · 宏观视野", (30, 64, 175), (239, 246, 255)),
-    0: ("花边 / 创意实验", (71, 85, 105), (248, 250, 252)),
-}
+# Module-level lang — set by WeeklyReportGenerator before generate()
+_lang = "en"
 
 PROBLEMATIC_REPLACEMENTS = {
     "\u200b": "",
@@ -96,8 +69,7 @@ def _score(item: dict) -> float:
 
 
 def _category_name(category_id: str) -> str:
-    label = CATEGORIES.get(category_id, category_id)
-    return label.split("—")[0].strip()
+    return get_category_name(category_id, _lang)
 
 
 def _parse_json(value):
@@ -160,12 +132,14 @@ def _get_category(item: dict) -> str:
 
 
 def _extract_display_content(item: dict) -> tuple[str, str]:
-    title = item.get("title", "无标题")
+    s = get_strings(_lang)
+    title = item.get("title", s["no_title"])
     summary = item.get("summary", "")
 
     summary_data = _parse_json(summary)
     if isinstance(summary_data, dict):
-        title = summary_data.get("title_zh") or summary_data.get("title") or title
+        title_key = "title_en" if _lang == "en" else "title_zh"
+        title = summary_data.get(title_key) or summary_data.get("title_zh") or summary_data.get("title") or title
         summary = summary_data.get("summary") or ""
     elif not summary:
         summary = item.get("content", "") or ""
@@ -291,7 +265,8 @@ def _render_score_badge(pdf: FPDF, font_name: str, x: float, y: float, score: fl
 
 def _build_meta_text(item: dict) -> str:
     metadata = _parse_json(item.get("metadata")) or {}
-    parts = [SOURCE_DISPLAY.get(item.get("source", ""), item.get("source", ""))]
+    s = get_strings(_lang)
+    parts = [s["sources"].get(item.get("source", ""), item.get("source", ""))]
 
     author = _clean_pdf_text(item.get("author", ""))
     if author:
@@ -312,8 +287,9 @@ def _build_meta_text(item: dict) -> str:
 
 
 class WeeklyReportPDF(FPDF):
-    def __init__(self):
+    def __init__(self, lang: str = "en"):
         super().__init__(orientation="L", format="A4")
+        self._s = get_strings(lang)
         self._zh = self._setup_fonts()
         self.set_margins(10, 10, 10)
         self.set_auto_page_break(auto=False)
@@ -334,14 +310,14 @@ class WeeklyReportPDF(FPDF):
                 return "zh"
             except Exception as exc:
                 logger.warning("Failed to load font %s: %s", regular, exc)
-        raise RuntimeError("未找到可用中文字体。")
+        raise RuntimeError(self._s["font_error"])
 
     def header(self):
         if self.page_no() == 1:
             return
         self.set_font(self._zh, "B", 9)
         self.set_text_color(71, 85, 105)
-        self.cell(0, 6, "AI 实践周报", new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 6, self._s["weekly_header"], new_x="LMARGIN", new_y="NEXT")
         self.set_draw_color(226, 232, 240)
         self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
         self.ln(3)
@@ -350,19 +326,25 @@ class WeeklyReportPDF(FPDF):
         self.set_y(-10)
         self.set_font(self._zh, "", 8)
         self.set_text_color(148, 163, 184)
-        self.cell(0, 5, f"第 {self.page_no()} 页 | 由 AIteller 自动生成", align="C")
+        self.cell(0, 5, self._s["page_footer"].format(page=self.page_no()), align="C")
 
 
 class WeeklyReportGenerator:
     """Generate weekly PDF report with experiment-style statistics and dense layout."""
 
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, lang: str = "en"):
         self.config = config
+        self.lang = lang
+        self._s = get_strings(lang)
         self.output_dir = Path(config.get("output", {}).get("weekly_dir", "./output/weekly"))
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def generate(self, items: list[dict], week_start: str, week_end: str) -> Path:
-        pdf = WeeklyReportPDF()
+        global _lang
+        _lang = self.lang
+        s = self._s
+
+        pdf = WeeklyReportPDF(lang=self.lang)
         pdf.add_page()
         self._render_cover_page(pdf, items, week_start, week_end)
 
@@ -373,7 +355,7 @@ class WeeklyReportGenerator:
                 continue
             self._render_tier_section(pdf, tier, categories)
 
-        filename = f"AI实践周报_{week_start}_{week_end}.pdf"
+        filename = s["weekly_filename"].format(start=week_start, end=week_end)
         output_path = self.output_dir / filename
         pdf.output(str(output_path))
         logger.info("Weekly report generated: %s (%d items)", output_path, len(items))
@@ -381,17 +363,18 @@ class WeeklyReportGenerator:
 
     def _render_cover_page(self, pdf: WeeklyReportPDF, items: list[dict], week_start: str, week_end: str):
         zh = pdf._zh
+        s = self._s
         pdf.set_fill_color(15, 23, 42)
         pdf.rect(10, 10, pdf.w - 20, 28, style="F")
         pdf.set_xy(16, 17)
         pdf.set_font(zh, "B", 24)
         pdf.set_text_color(255, 255, 255)
-        pdf.cell(0, 10, "AI 实践周报")
+        pdf.cell(0, 10, s["weekly_title"])
         pdf.ln(11)
         pdf.set_x(16)
         pdf.set_font(zh, "", 11)
         pdf.set_text_color(203, 213, 225)
-        pdf.cell(0, 6, f"{week_start} ~ {week_end} | 共 {len(items)} 篇精选")
+        pdf.cell(0, 6, s["weekly_subtitle"].format(start=week_start, end=week_end, count=len(items)))
 
         self._render_top_category_bar(pdf, items)
         self._render_source_overview(pdf, items)
@@ -428,24 +411,26 @@ class WeeklyReportGenerator:
             pdf.set_x(x)
             pdf.set_font(zh, "", 8)
             pdf.set_text_color(71, 85, 105)
-            label = "其他" if category_id == "other" else _category_name(category_id)
+            label = self._s["weekly_other"] if category_id == "other" else _category_name(category_id)
             pdf.cell(card_w, 5, _clean_pdf_text(label), align="C")
 
     def _render_source_overview(self, pdf: WeeklyReportPDF, items: list[dict]):
         zh = pdf._zh
+        s = self._s
+        src_names = s["sources"]
         stats = _source_stats(items)
         y = 66
 
         pdf.set_xy(10, y)
         pdf.set_font(zh, "B", 12)
         pdf.set_text_color(15, 23, 42)
-        pdf.cell(0, 7, "来源概览", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, s["weekly_source_overview"], new_x="LMARGIN", new_y="NEXT")
 
         widths = [48, 28, 26]
         table_x = 10
         table_y = pdf.get_y()
 
-        headers = ["来源", "数量", "均分"]
+        headers = s["weekly_source_headers"]
         pdf.set_fill_color(241, 245, 249)
         pdf.set_text_color(15, 23, 42)
         pdf.set_font(zh, "B", 9)
@@ -457,7 +442,7 @@ class WeeklyReportGenerator:
         for row in stats:
             pdf.set_x(table_x)
             pdf.set_text_color(51, 65, 85)
-            pdf.cell(widths[0], 6, _clean_pdf_text(SOURCE_DISPLAY.get(row["source"], row["source"])), border=1)
+            pdf.cell(widths[0], 6, _clean_pdf_text(src_names.get(row["source"], row["source"])), border=1)
             pdf.cell(widths[1], 6, str(row["count"]), border=1, align="C")
             pdf.cell(widths[2], 6, f"{row['avg_score']:.2f}", border=1, align="C")
             pdf.ln(6)
@@ -466,24 +451,21 @@ class WeeklyReportGenerator:
         pdf.set_xy(118, table_y - 7)
         pdf.set_font(zh, "B", 12)
         pdf.set_text_color(15, 23, 42)
-        pdf.cell(0, 7, "说明", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, s["weekly_notes_title"], new_x="LMARGIN", new_y="NEXT")
         pdf.set_x(118)
         pdf.set_font(zh, "", 8.5)
         pdf.set_text_color(71, 85, 105)
-        note = (
-            "本报告沿用 experiment_results 的分类体系，保留 5.x / 6.x 十分制分数。"
-            "正文采用对称双栏高密度列表，按 Tier → 分类 → 分数排序，便于快速扫读。"
-        )
-        pdf.multi_cell(168, 5, _clean_pdf_text(note))
+        pdf.multi_cell(168, 5, _clean_pdf_text(s["weekly_notes_body"]))
         right_bottom_y = pdf.get_y()
 
         pdf.set_y(max(left_bottom_y, right_bottom_y) + 4)
 
     def _render_category_distribution(self, pdf: WeeklyReportPDF, items: list[dict]):
         zh = pdf._zh
+        s = self._s
         pdf.set_font(zh, "B", 12)
         pdf.set_text_color(15, 23, 42)
-        pdf.cell(0, 7, "分类分布", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 7, s["weekly_category_dist"], new_x="LMARGIN", new_y="NEXT")
 
         preferred_sources = [
             source for source in [
@@ -513,17 +495,18 @@ class WeeklyReportGenerator:
         pdf.set_font(zh, "B", 7.6)
         pdf.set_fill_color(241, 245, 249)
         pdf.set_text_color(15, 23, 42)
-        pdf.cell(category_w, 7, "分类", border=1, fill=True, align="C")
+        pdf.cell(category_w, 7, s["weekly_category_header"], border=1, fill=True, align="C")
         for source in sources:
-            pdf.cell(source_w, 7, SOURCE_REPORT_HEADER.get(source, SOURCE_ALIAS.get(source, source[:8])), border=1, fill=True, align="C")
-        pdf.cell(total_col_w, 7, "总计", border=1, fill=True, align="C")
+            pdf.cell(source_w, 7, SOURCE_REPORT_HEADER.get(source, s["source_alias"].get(source, source[:8])), border=1, fill=True, align="C")
+        pdf.cell(total_col_w, 7, s["weekly_total"], border=1, fill=True, align="C")
         pdf.ln(7)
 
         pdf.set_font(zh, "", 7.4)
+        tier_labels = s["tier_weekly"]
         for row in rows:
             tier = row["tier"]
             pdf.set_x(pdf.l_margin)
-            pdf.set_fill_color(*TIER_LABELS[tier][2])
+            pdf.set_fill_color(*tier_labels[tier][2])
             pdf.set_text_color(15, 23, 42)
             pdf.cell(category_w, 6, _clean_pdf_text(row["category_name"]), border=1, fill=True)
             for source in sources:
@@ -537,7 +520,7 @@ class WeeklyReportGenerator:
             pdf.ln(2)
             pdf.set_font(zh, "", 8)
             pdf.set_text_color(100, 116, 139)
-            pdf.cell(0, 5, f"注：花边/创意实验 {novelty_count} 条，已移到正文单独板块，不混入核心工程分类表。")
+            pdf.cell(0, 5, s["weekly_novelty_note"].format(count=novelty_count))
 
     def _render_tier_section(self, pdf: WeeklyReportPDF, tier: int, categories: dict[str, list[dict]]):
         tier_total = sum(len(group) for group in categories.values())
@@ -556,25 +539,25 @@ class WeeklyReportGenerator:
 
     def _render_tier_header(self, pdf: WeeklyReportPDF, tier: int, tier_total: int):
         zh = pdf._zh
-        title, color, _ = TIER_LABELS[tier]
+        title, color, _ = self._s["tier_weekly"][tier]
         pdf.set_fill_color(*color)
         pdf.rect(pdf.l_margin, pdf.get_y(), pdf.w - pdf.l_margin - pdf.r_margin, 9, style="F")
         pdf.set_xy(pdf.l_margin + 4, pdf.get_y() + 1.5)
         pdf.set_font(zh, "B", 12)
         pdf.set_text_color(255, 255, 255)
-        pdf.cell(0, 6, f"{title} ({tier_total}条)")
+        pdf.cell(0, 6, f"{title} ({tier_total})")
         pdf.ln(10)
 
     def _render_category_header(self, pdf: WeeklyReportPDF, category_id: str, count: int, tier: int):
         zh = pdf._zh
-        _, color, fill = TIER_LABELS[tier]
+        _, color, fill = self._s["tier_weekly"][tier]
         pdf.set_fill_color(*fill)
         pdf.set_draw_color(226, 232, 240)
         pdf.rect(pdf.l_margin, pdf.get_y(), pdf.w - pdf.l_margin - pdf.r_margin, 7, style="FD")
         pdf.set_xy(pdf.l_margin + 3, pdf.get_y() + 1)
         pdf.set_font(zh, "B", 10)
         pdf.set_text_color(*color)
-        pdf.cell(0, 5, f"{_category_name(category_id)} ({count}条)")
+        pdf.cell(0, 5, f"{_category_name(category_id)} ({count})")
         pdf.ln(7.5)
 
     def _measure_item_height(self, pdf: WeeklyReportPDF, col_w: float, item: dict) -> float:
@@ -584,7 +567,7 @@ class WeeklyReportGenerator:
 
         title_w = col_w - 14
         pdf.set_font(zh, "B", 9.2)
-        title_h = pdf.multi_cell(title_w, 4.2, title or "无标题", dry_run=True, output="HEIGHT")
+        title_h = pdf.multi_cell(title_w, 4.2, title or get_strings(_lang)["no_title"], dry_run=True, output="HEIGHT")
         summary_h = 0.0
         if summary:
             pdf.set_font(zh, "", 8)
@@ -607,7 +590,7 @@ class WeeklyReportGenerator:
         pdf.set_xy(x + 14, y)
         pdf.set_font(zh, "B", 9.2)
         pdf.set_text_color(30, 41, 59)
-        pdf.multi_cell(col_w - 14, 4.2, title or "无标题", link=url or "")
+        pdf.multi_cell(col_w - 14, 4.2, title or get_strings(_lang)["no_title"], link=url or "")
 
         if summary:
             pdf.set_x(x)
