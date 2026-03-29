@@ -1,0 +1,109 @@
+collection:
+  interval_hours: 3
+  lookback_hours: 6
+  max_items_per_source: 100
+
+keywords:
+  primary:
+    - LLM
+    - GPT
+    - Claude
+    - AI agent
+    - prompt engineering
+    - RAG
+    - fine-tuning
+    - embedding
+    - vector database
+    - AI coding
+    - copilot
+    - cursor
+    - aider
+    - claude code
+  boost:
+    - tutorial
+    - workflow
+    - experience
+    - production
+    - real-world
+    - benchmark
+    - comparison
+    - 实战
+    - 经验
+    - 教程
+
+sources:
+  hackernews:
+    enabled: true
+    min_points: 50
+  reddit:
+    enabled: true
+    client_id: "${REDDIT_CLIENT_ID}"
+    client_secret: "${REDDIT_CLIENT_SECRET}"
+    subreddits:
+      - LocalLLaMA
+      - MachineLearning
+      - ClaudeAI
+      - ChatGPT
+    min_score: 20
+  github_trending:
+    enabled: true
+    languages: ["python", "typescript", "rust"]
+  arxiv:
+    enabled: true
+    categories: ["cs.CL", "cs.AI", "cs.LG"]
+  youtube:
+    enabled: true
+  bilibili:
+    enabled: true
+  twitter:
+    enabled: true
+    nitter_instances:
+      - "https://nitter.privacydev.net"
+      - "https://nitter.poast.org"
+    rsshub_instance: "https://rsshub.app"
+  rss_blogs:
+    enabled: true
+
+llm:
+  primary: "claude"
+  fallback: "openai"
+  claude:
+    api_key: "${CLAUDE_API_KEY}"
+    fast_model: "claude-haiku-4-5-20251001"
+    standard_model: "claude-sonnet-4-6"
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    fast_model: "gpt-4o-mini"
+    standard_model: "gpt-4o"
+  daily_token_budget: 500000
+
+notification:
+  schedule: "08:00"
+  channels:
+    slack:
+      enabled: true
+      webhook_url: "${SLACK_WEBHOOK_URL}"
+    wechat:
+      enabled: true
+      webhook_url: "${WECHAT_WEBHOOK_URL}"
+    email:
+      enabled: true
+      smtp_host: "smtp.qq.com"
+      smtp_port: 465
+      sender: "${EMAIL_SENDER}"
+      password: "${EMAIL_PASSWORD}"
+      recipients: []
+
+report:
+  output_dir: "./data/reports"
+
+storage:
+  db_path: "./data/aiteller.db"
+  retention_days_raw: 30
+  retention_days_processed: 90
+
+logging:
+  level: "INFO"
+  file: "./logs/aiteller.log"
+  max_size_mb: 50
+  backup_count: 5

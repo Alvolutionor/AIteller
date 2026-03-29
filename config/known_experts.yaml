@@ -1,0 +1,145 @@
+# config/known_experts.yaml
+experts:
+  - name: "Simon Willison"
+    aliases: ["simonw", "Simon Willison", "simonwillison"]
+    score: 1.0
+  - name: "Andrej Karpathy"
+    aliases: ["karpathy", "Andrej Karpathy"]
+    score: 1.0
+  - name: "swyx"
+    aliases: ["swyx", "Shawn Wang"]
+    score: 0.9
+  - name: "Chip Huyen"
+    aliases: ["chiphuyen", "Chip Huyen"]
+    score: 0.9
+  - name: "Lilian Weng"
+    aliases: ["lilianweng", "Lilian Weng"]
+    score: 0.95
+  - name: "Jeremy Howard"
+    aliases: ["jhoward", "Jeremy Howard"]
+    score: 0.95
+  - name: "Harrison Chase"
+    aliases: ["hwchase17", "Harrison Chase"]
+    score: 0.85
+  - name: "Jason Liu"
+    aliases: ["jxnl", "Jason Liu"]
+    score: 0.85
+  - name: "Eugene Yan"
+    aliases: ["eugeneyan", "Eugene Yan"]
+    score: 0.85
+  - name: "Sebastian Raschka"
+    aliases: ["rasbt", "Sebastian Raschka"]
+    score: 0.9
+  - name: "Vicki Boykis"
+    aliases: ["vboykis", "Vicki Boykis"]
+    score: 0.85
+  - name: "Hamel Husain"
+    aliases: ["hamelhusain", "Hamel Husain"]
+    score: 0.85
+  - name: "Mitchell Hashimoto"
+    aliases: ["mitchellh", "Mitchell Hashimoto"]
+    score: 0.9
+  - name: "Julia Evans"
+    aliases: ["jvns", "Julia Evans", "b0rk"]
+    score: 0.9
+  - name: "Paul Graham"
+    aliases: ["pg", "Paul Graham"]
+    score: 0.95
+  - name: "Andrew Ng"
+    aliases: ["AndrewYNg", "Andrew Ng"]
+    score: 0.95
+  - name: "Yann LeCun"
+    aliases: ["ylecun", "Yann LeCun"]
+    score: 0.95
+  - name: "Jim Fan"
+    aliases: ["DrJimFan", "Jim Fan"]
+    score: 0.85
+  - name: "Dario Amodei"
+    aliases: ["DarioAmodei", "Dario Amodei"]
+    score: 0.95
+  - name: "Greg Brockman"
+    aliases: ["gaborcselle", "Greg Brockman"]
+    score: 0.9
+  - name: "George Hotz"
+    aliases: ["realGeorgeHotz", "George Hotz", "geohot"]
+    score: 0.85
+  - name: "Matt Pocock"
+    aliases: ["mattpocockuk", "Matt Pocock"]
+    score: 0.8
+  - name: "Cole Medin"
+    aliases: ["Cole Medin"]
+    score: 0.75
+  - name: "Riley Goodside"
+    aliases: ["goodside", "Riley Goodside"]
+    score: 0.85
+  - name: "阮一峰"
+    aliases: ["阮一峰", "ruanyf"]
+    score: 0.8
+  # --- Added from research ---
+  - name: "Ethan Mollick"
+    aliases: ["emollick", "Ethan Mollick"]
+    score: 0.9
+  - name: "Nathan Lambert"
+    aliases: ["natolambert", "Nathan Lambert"]
+    score: 0.85
+  - name: "Arvind Narayanan"
+    aliases: ["random_walker", "Arvind Narayanan"]
+    score: 0.9
+  - name: "Chris Olah"
+    aliases: ["ch402", "Chris Olah", "colah"]
+    score: 0.95
+  - name: "Gwern Branwen"
+    aliases: ["gwern", "Gwern"]
+    score: 0.9
+  - name: "François Chollet"
+    aliases: ["fchollet", "François Chollet", "Francois Chollet"]
+    score: 0.95
+  - name: "Pieter Levels"
+    aliases: ["levelsio", "Pieter Levels"]
+    score: 0.8
+  - name: "Guillermo Rauch"
+    aliases: ["rauchg", "Guillermo Rauch"]
+    score: 0.85
+  - name: "Thorsten Ball"
+    aliases: ["thorstenball", "Thorsten Ball"]
+    score: 0.85
+  - name: "Jason Wei"
+    aliases: ["jasonwei20", "Jason Wei"]
+    score: 0.9
+  - name: "Shreya Shankar"
+    aliases: ["sh_reya", "Shreya Shankar"]
+    score: 0.85
+  - name: "Nils Reimers"
+    aliases: ["Nils_Reimers", "Nils Reimers"]
+    score: 0.85
+  - name: "Elvis Saravia"
+    aliases: ["oabormarriott", "Elvis Saravia"]
+    score: 0.8
+  - name: "Zvi Mowshowitz"
+    aliases: ["TheZvi", "Zvi Mowshowitz"]
+    score: 0.8
+  - name: "Mustafa Suleyman"
+    aliases: ["mustafasuleyman", "Mustafa Suleyman"]
+    score: 0.9
+  - name: "Jeff Dean"
+    aliases: ["JeffDean", "Jeff Dean"]
+    score: 0.95
+  - name: "Lex Fridman"
+    aliases: ["lexfridman", "Lex Fridman"]
+    score: 0.85
+  - name: "Kirk Borne"
+    aliases: ["KirkDBorne", "Kirk Borne"]
+    score: 0.8
+  - name: "Bojan Tunguz"
+    aliases: ["tunguz", "Bojan Tunguz"]
+    score: 0.8
+  # --- Chinese AI experts ---
+  - name: "李沐"
+    aliases: ["李沐", "Mu Li", "跟李沐学AI"]
+    score: 0.95
+  - name: "李宏毅"
+    aliases: ["李宏毅", "Hung-yi Lee"]
+    score: 0.9
+  - name: "同济子豪兄"
+    aliases: ["同济子豪兄"]
+    score: 0.8
