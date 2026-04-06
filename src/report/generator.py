@@ -192,13 +192,16 @@ class ReportGenerator:
         # Parse summary JSON
         summary_raw = item.get("summary", "")
         summary = ""
-        title_key = "title_en" if self.lang == "en" else "title_zh"
         if isinstance(summary_raw, str):
             try:
                 obj = json.loads(summary_raw)
                 if isinstance(obj, dict):
-                    title = obj.get(title_key, obj.get("title_zh", title)) or title
-                    summary = obj.get("summary", "")
+                    if self.lang == "en":
+                        title = obj.get("title_en") or title
+                        summary = item.get("content", "") or obj.get("summary", "")
+                    else:
+                        title = obj.get("title_zh", obj.get("title", title)) or title
+                        summary = obj.get("summary", "")
                 else:
                     summary = summary_raw
             except (json.JSONDecodeError, TypeError):

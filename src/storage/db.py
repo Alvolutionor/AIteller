@@ -397,6 +397,15 @@ class Database:
             await self._conn.execute("DELETE FROM scores")
         await self._conn.commit()
 
+    async def get_weekly_raw_counts(self, since: datetime) -> dict[str, int]:
+        """Get raw item counts per source since a given date (before filtering)."""
+        async with self._conn.execute(
+            "SELECT source, COUNT(*) as cnt FROM raw_items WHERE collected_at >= ? GROUP BY source",
+            (since.isoformat(),),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return {row["source"]: row["cnt"] for row in rows}
+
     async def get_weekly_items(self, since: datetime) -> list[dict]:
         """Get all processed+passed items since a given date, with raw item data joined."""
         async with self._conn.execute(

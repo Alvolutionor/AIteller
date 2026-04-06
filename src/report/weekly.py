@@ -133,16 +133,23 @@ def _get_category(item: dict) -> str:
 
 def _extract_display_content(item: dict) -> tuple[str, str]:
     s = get_strings(_lang)
-    title = item.get("title", s["no_title"])
+    orig_title = item.get("title", s["no_title"])
     summary = item.get("summary", "")
 
     summary_data = _parse_json(summary)
     if isinstance(summary_data, dict):
-        title_key = "title_en" if _lang == "en" else "title_zh"
-        title = summary_data.get(title_key) or summary_data.get("title_zh") or summary_data.get("title") or title
-        summary = summary_data.get("summary") or ""
-    elif not summary:
-        summary = item.get("content", "") or ""
+        if _lang == "en":
+            # English: prefer original title (already English from sources),
+            # and use original content instead of Chinese summary
+            title = summary_data.get("title_en") or orig_title
+            summary = item.get("content", "") or summary_data.get("summary") or ""
+        else:
+            title = summary_data.get("title_zh") or summary_data.get("title") or orig_title
+            summary = summary_data.get("summary") or ""
+    else:
+        title = orig_title
+        if not summary:
+            summary = item.get("content", "") or ""
 
     title = _clean_pdf_text(title)
     summary = _clean_pdf_text(summary)
@@ -339,14 +346,15 @@ class WeeklyReportGenerator:
         self.output_dir = Path(config.get("output", {}).get("weekly_dir", "./output/weekly"))
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def generate(self, items: list[dict], week_start: str, week_end: str) -> Path:
+    def generate(self, items: list[dict], week_start: str, week_end: str,
+                 raw_counts: dict[str, int] | None = None) -> Path:
         global _lang
         _lang = self.lang
         s = self._s
 
         pdf = WeeklyReportPDF(lang=self.lang)
         pdf.add_page()
-        self._render_cover_page(pdf, items, week_start, week_end)
+        self._render_cover_page(pdf, items, week_start, week_end, raw_counts=raw_counts)
 
         grouped = _group_items_by_tier_and_category(items)
         for tier in (1, 2, 3, 0):
@@ -361,7 +369,8 @@ class WeeklyReportGenerator:
         logger.info("Weekly report generated: %s (%d items)", output_path, len(items))
         return output_path
 
-    def _render_cover_page(self, pdf: WeeklyReportPDF, items: list[dict], week_start: str, week_end: str):
+    def _render_cover_page(self, pdf: WeeklyReportPDF, items: list[dict], week_start: str, week_end: str,
+                           raw_counts: dict[str, int] | None = None):
         zh = pdf._zh
         s = self._s
         pdf.set_fill_color(15, 23, 42)
@@ -377,7 +386,7 @@ class WeeklyReportGenerator:
         pdf.cell(0, 6, s["weekly_subtitle"].format(start=week_start, end=week_end, count=len(items)))
 
         self._render_top_category_bar(pdf, items)
-        self._render_source_overview(pdf, items)
+        self._render_source_overview(pdf, items, raw_counts=raw_counts)
         self._render_category_distribution(pdf, items)
 
     def _render_top_category_bar(self, pdf: WeeklyReportPDF, items: list[dict]):
@@ -414,7 +423,8 @@ class WeeklyReportGenerator:
             label = self._s["weekly_other"] if category_id == "other" else _category_name(category_id)
             pdf.cell(card_w, 5, _clean_pdf_text(label), align="C")
 
-    def _render_source_overview(self, pdf: WeeklyReportPDF, items: list[dict]):
+    def _render_source_overview(self, pdf: WeeklyReportPDF, items: list[dict],
+                               raw_counts: dict[str, int] | None = None):
         zh = pdf._zh
         s = self._s
         src_names = s["sources"]
@@ -426,11 +436,16 @@ class WeeklyReportGenerator:
         pdf.set_text_color(15, 23, 42)
         pdf.cell(0, 7, s["weekly_source_overview"], new_x="LMARGIN", new_y="NEXT")
 
-        widths = [48, 28, 26]
+        has_raw = raw_counts and any(raw_counts.values())
+        if has_raw:
+            widths = [40, 24, 24, 24]
+            headers = s["weekly_source_headers_full"]
+        else:
+            widths = [48, 28, 26]
+            headers = s["weekly_source_headers"]
         table_x = 10
         table_y = pdf.get_y()
 
-        headers = s["weekly_source_headers"]
         pdf.set_fill_color(241, 245, 249)
         pdf.set_text_color(15, 23, 42)
         pdf.set_font(zh, "B", 9)
@@ -438,14 +453,49 @@ class WeeklyReportGenerator:
             pdf.cell(width, 7, header, border=1, fill=True, align="C")
         pdf.ln(7)
 
+        # Collect all sources (union of passed stats + raw_counts keys)
+        all_sources = [row["source"] for row in stats]
+        if has_raw:
+            for src in SOURCE_ORDER:
+                if src in raw_counts and src not in all_sources:
+                    all_sources.append(src)
+
         pdf.set_font(zh, "", 8)
-        for row in stats:
+        total_raw = 0
+        total_passed = 0
+        for source in all_sources:
             pdf.set_x(table_x)
             pdf.set_text_color(51, 65, 85)
-            pdf.cell(widths[0], 6, _clean_pdf_text(src_names.get(row["source"], row["source"])), border=1)
-            pdf.cell(widths[1], 6, str(row["count"]), border=1, align="C")
-            pdf.cell(widths[2], 6, f"{row['avg_score']:.2f}", border=1, align="C")
+            stat_row = next((r for r in stats if r["source"] == source), None)
+            passed_count = stat_row["count"] if stat_row else 0
+            avg_score = stat_row["avg_score"] if stat_row else 0.0
+
+            pdf.cell(widths[0], 6, _clean_pdf_text(src_names.get(source, source)), border=1)
+            if has_raw:
+                raw_count = raw_counts.get(source, 0)
+                total_raw += raw_count
+                total_passed += passed_count
+                pdf.cell(widths[1], 6, str(raw_count), border=1, align="C")
+                pdf.cell(widths[2], 6, str(passed_count), border=1, align="C")
+                pdf.cell(widths[3], 6, f"{avg_score:.2f}", border=1, align="C")
+            else:
+                pdf.cell(widths[1], 6, str(passed_count), border=1, align="C")
+                pdf.cell(widths[2], 6, f"{avg_score:.2f}", border=1, align="C")
             pdf.ln(6)
+
+        # Total row
+        if has_raw:
+            pdf.set_x(table_x)
+            pdf.set_font(zh, "B", 8)
+            pdf.set_fill_color(241, 245, 249)
+            pdf.cell(widths[0], 6, s["weekly_total"], border=1, fill=True)
+            pdf.cell(widths[1], 6, str(total_raw), border=1, align="C", fill=True)
+            pdf.cell(widths[2], 6, str(total_passed), border=1, align="C", fill=True)
+            pass_rate = f"{total_passed / total_raw * 100:.1f}%" if total_raw else "-"
+            pdf.cell(widths[3], 6, pass_rate, border=1, align="C", fill=True)
+            pdf.ln(6)
+            pdf.set_font(zh, "", 8)
+
         left_bottom_y = pdf.get_y()
 
         pdf.set_xy(118, table_y - 7)

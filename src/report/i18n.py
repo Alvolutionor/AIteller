@@ -21,6 +21,7 @@ STRINGS = {
         "weekly_subtitle": "{start} ~ {end} | {count} curated items",
         "weekly_source_overview": "Source Overview",
         "weekly_source_headers": ["Source", "Count", "Avg"],
+        "weekly_source_headers_full": ["Source", "Crawled", "Passed", "Avg"],
         "weekly_notes_title": "Notes",
         "weekly_notes_body": (
             "This report uses a tiered category system with a 0-10 scoring scale. "
@@ -104,6 +105,7 @@ STRINGS = {
         "weekly_subtitle": "{start} ~ {end} | 共 {count} 篇精选",
         "weekly_source_overview": "来源概览",
         "weekly_source_headers": ["来源", "数量", "均分"],
+        "weekly_source_headers_full": ["来源", "爬取", "入选", "均分"],
         "weekly_notes_title": "说明",
         "weekly_notes_body": (
             "本报告沿用 experiment_results 的分类体系，保留 5.x / 6.x 十分制分数。"

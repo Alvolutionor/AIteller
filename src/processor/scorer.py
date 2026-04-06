@@ -78,14 +78,12 @@ class DeterministicScorer:
 
     def _engagement_github(self, m: dict) -> float:
         stars = m.get("stars") or 0
-        forks = m.get("forks") or 0
         today_stars = m.get("today_stars") or 0
         # GitHub: star velocity matters more than total stars
         # 10 today_stars = very active, 100 = viral
         velocity_score = min(1.0, math.log10(max(1, today_stars + 1)) / 2.0)
         total_score = min(1.0, math.log10(max(1, stars)) / 4.5)
-        fork_score = min(0.3, math.log10(max(1, forks)) / 5.0)
-        return min(1.0, velocity_score * 0.5 + total_score * 0.3 + fork_score * 0.2)
+        return min(1.0, velocity_score * 0.55 + total_score * 0.45)
 
     def _engagement_reddit(self, m: dict) -> float:
         score = m.get("score") or 0
@@ -97,7 +95,7 @@ class DeterministicScorer:
 
     def _engagement_hn(self, m: dict) -> float:
         points = m.get("points") or m.get("score") or 0
-        comments = m.get("num_comments") or 0
+        comments = m.get("num_comments") or m.get("comments") or m.get("descendants") or 0
         # HN: 100 points = front page, 500 = very popular
         pts_score = min(1.0, math.log10(max(1, points)) / 2.7)
         comment_score = min(0.5, math.log10(max(1, comments)) / 2.5)
@@ -261,17 +259,38 @@ class DeterministicScorer:
             replies = m.get("replies") or 0
             retweets = m.get("retweets") or 0
             heat = replies + retweets
+            # Twitter: 10 replies = decent, 100 = hot
+            divisor = 2.0
         elif source == "github_trending":
-            # GitHub: issues + forks as discussion proxy
-            issues = m.get("open_issues") or 0
-            forks = m.get("forks") or 0
-            heat = issues + forks
+            # Trending API doesn't provide forks/issues; use today_stars as buzz proxy
+            heat = m.get("today_stars") or 0
+            # GitHub trending: 50 today_stars = active, 500 = viral
+            divisor = 2.7
+        elif source == "bilibili":
+            review = m.get("review") or 0
+            danmaku = m.get("danmaku") or 0
+            heat = review + danmaku
+            # Bilibili: 5 comments = decent for niche, 50 = active
+            divisor = 1.7
+        elif source == "reddit":
+            heat = m.get("num_comments") or 0
+            # Reddit: 50 comments = decent, 500 = hot
+            divisor = 2.7
+        elif source in ("hackernews", "lobsters"):
+            heat = m.get("num_comments") or m.get("comments") or m.get("descendants") or 0
+            # HN: 10 comments = decent discussion, 100 = very active
+            divisor = 2.0
+        elif source == "youtube":
+            heat = m.get("comment_count") or m.get("comments") or 0
+            # YouTube: 20 comments = decent, 200 = active
+            divisor = 2.3
         else:
             heat = m.get("num_comments") or m.get("comments") or m.get("comment_count") or 0
+            divisor = 2.5
 
         if heat <= 0:
             return 0.0
-        return min(1.0, math.log10(max(1, heat)) / 2.5)
+        return min(1.0, math.log10(max(1, heat)) / divisor)
 
 
 def compute_total_score(breakdown: dict[str, float]) -> float:

@@ -323,6 +323,7 @@ async def cmd_report_weekly(config: dict, top_n: int = 100, lang: str = "en"):
         week_end = today.strftime("%Y-%m-%d")
 
         all_items = await db.get_weekly_items(week_ago)
+        raw_counts = await db.get_weekly_raw_counts(week_ago)
         if not all_items:
             console.print("[yellow]No items found for the past week[/yellow]")
             return
@@ -336,7 +337,7 @@ async def cmd_report_weekly(config: dict, top_n: int = 100, lang: str = "en"):
             items = all_items
 
         generator = WeeklyReportGenerator(config, lang=lang)
-        pdf_path = generator.generate(items, week_start, week_end)
+        pdf_path = generator.generate(items, week_start, week_end, raw_counts=raw_counts)
         console.print(f"[green]Weekly PDF generated: {pdf_path}[/green]")
     finally:
         await db.close()
