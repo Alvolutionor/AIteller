@@ -1,0 +1,326 @@
+collection:
+  interval_hours: 3
+  lookback_hours: 744    # 2026-08-23 -> 2026-09-23 catch-up (31 days)
+  max_items_per_source: 0  # 0 = unlimited
+
+keywords:
+  # ── 基础匹配词 (B站/YouTube/Twitter RSS 等用于过滤) ──
+  primary:
+    # LLM / Model names
+    - LLM
+    - GPT
+    - Claude
+    - Gemini
+    - DeepSeek
+    - Llama
+    - Qwen
+    - Mistral
+    # AI Engineering
+    - AI agent
+    - AI coding
+    - prompt engineering
+    - RAG
+    - fine-tuning
+    - embedding
+    - vector database
+    - function calling
+    - tool use
+    - MCP server
+    - model context protocol
+    # AI Coding Tools
+    - copilot
+    - cursor
+    - aider
+    - claude code
+    - codex
+    - windsurf
+    - cline
+    - continue.dev
+    # Infrastructure
+    - vLLM
+    - ollama
+    - llama.cpp
+    - TensorRT-LLM
+    - inference optimization
+    # Chinese
+    - AI编程
+    - 大模型
+    - 智能体
+    - 提示词工程
+
+  # ── 加分词 (评分时加权) ──
+  boost:
+    - workflow
+    - experience
+    - production
+    - real-world
+    - benchmark
+    - postmortem
+    - 实战
+    - 经验
+    - 踩坑
+    - 复盘
+
+  # ── Twitter 全文搜索查询 (每次随机采样一部分) ──
+  twitter_queries:
+    # English — engineering practice
+    - "AI agent production experience"
+    - "Claude Code tips OR tricks"
+    - "LLM RAG lessons learned"
+    - "AI coding workflow"
+    - "prompt engineering real project"
+    - "fine-tuning experience mistakes"
+    - 'cursor OR "claude code" workflow'
+    - "LLM deployment lessons"
+    - "AI coding agent review"
+    - "built with AI agent"
+    - "RAG pipeline production"
+    - "vector database experience"
+    - "AI code review automation"
+    - "LLM inference optimization"
+    - "agentic coding experience"
+    - "vibe coding results"
+    - "AI pair programming experience"
+    - "MCP server tools"
+    - "openai API production tips"
+    # English — postmortem / failure
+    - "AI project failed learned"
+    - "LLM hallucination production fix"
+    - "AI agent debugging hard"
+    # English — tool comparison
+    - "claude vs gpt real project"
+    - "cursor vs windsurf experience"
+    - "copilot vs claude code"
+    # Chinese
+    - "AI工程实践"
+    - "大模型 踩坑"
+    - "Claude Code 经验"
+    - "AI编程 工作流"
+    - "RAG 实战经验"
+    - "prompt 优化 实际项目"
+    - "LLM 部署 经验分享"
+    - "AI agent 开发心得"
+    - "向量数据库 踩坑"
+
+  # ── GitHub Search (topic: 和 keyword 搜索) ──
+  github_topics:
+    - llm
+    - large-language-model
+    - ai-agent
+    - rag
+    - prompt-engineering
+    - ai-coding
+    - langchain
+    - vector-database
+    - fine-tuning
+    - mcp
+    - model-context-protocol
+  github_keywords:
+    - "AI agent framework"
+    - "LLM inference"
+    - "RAG pipeline"
+    - "AI coding assistant"
+    - "prompt engineering tool"
+    - "claude code"
+    - "vector search"
+    - "embedding model"
+    - "llm tool use"
+    - "agentic workflow"
+
+sources:
+  hackernews:
+    enabled: true
+    min_points: 10
+  reddit:
+    enabled: true
+    checkpoint_ttl_hours: 6
+    client_id: "${REDDIT_CLIENT_ID}"
+    client_secret: "${REDDIT_CLIENT_SECRET}"
+    subreddits:
+      # AI/LLM core models & frameworks
+      - LocalLLaMA
+      - LocalLLM
+      - MachineLearning
+      - ClaudeAI
+      - ChatGPT
+      - ChatGPTPro
+      - ChatGPTCoding
+      - artificial
+      - ArtificialIntelligence
+      - LangChain
+      - Rag
+      - singularity
+      - ollama
+      - OpenAI
+      - Anthropic
+      - GoogleGeminiAI
+      - grok
+      - perplexity_ai
+      - deeplearning
+      - reinforcementlearning
+      # famous models
+      - MistralAI
+      - DeepSeek
+      - Qwen_AI
+      # AI agents / protocols
+      - AI_Agents
+      - MCPServers
+      - AgentsOfAI
+      - AI_Agent
+      - LLMDevs
+      - AutoGPT
+      - crewai
+      - LangGraph
+      - AgentToAgent
+      - n8n
+      # AI coding & vibecoding
+      - ClaudeCode
+      - CursorAI
+      - PromptEngineering
+      - vibecoding
+      - GithubCopilot
+      - WindsurfAI
+      - codex
+      - OpenAICodex
+      - Codeium
+      - aicoding
+      - AICodingTools
+      - replit
+      - JetBrainsAI
+      - tabnine
+      - AiderAI
+      # AI image / video generation
+      - StableDiffusion
+      - midjourney
+      - comfyui
+      - civitai
+      - aivideo
+    min_score: 15
+  github_trending:
+    enabled: true
+    languages: ["python", "typescript", "rust", "go", "jupyter-notebook", "c++"]
+    token: "${GITHUB_TOKEN}"
+    min_stars: 5
+  arxiv:
+    enabled: true
+    categories: ["cs.CL", "cs.AI", "cs.LG", "cs.CV", "cs.IR", "cs.SE", "cs.MA"]
+  youtube:
+    enabled: true
+    max_results_per_keyword: 30
+    max_total_videos: 500    # cap after dedup across keywords
+  bilibili:
+    enabled: true
+    max_pages: 10
+    page_size: 50
+  twitter:
+    enabled: true
+    auth_token: "${TWITTER_AUTH_TOKEN}"
+    ct0: "${TWITTER_CT0}"
+    # No budget limits — full weekly sweep
+    max_requests: 9999
+    max_search_queries: 0    # 0 = all queries
+    max_user_lookups: 0      # 0 = all accounts
+    results_per_query: 100
+    delay_min: 5.0
+    delay_max: 12.0
+  rss_blogs:
+    enabled: true
+  devto:
+    enabled: true
+  lobsters:
+    enabled: true
+  medium:
+    enabled: true
+  hf_papers:
+    enabled: true
+  media:
+    enabled: true
+  linkedin:
+    enabled: true
+    search_queries: []  # extra Google News queries (optional)
+
+llm:
+  primary: "claude_proxy"
+  fallback: ""
+  claude_proxy:
+    base_url: "http://localhost:8766/v1"
+    api_key: "not-needed"
+    fast_model: "claude-haiku-4-5-20251001"
+    standard_model: "claude-sonnet-4-6"
+  claude:
+    api_key: "${CLAUDE_API_KEY}"
+    fast_model: "claude-haiku-4-5-20251001"
+    standard_model: "claude-sonnet-4-6"
+  openai:
+    api_key: "${OPENAI_API_KEY}"
+    fast_model: "gpt-4o-mini"
+    standard_model: "gpt-4o"
+  deepseek:
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com"
+    fast_model: "deepseek-v4-flash"
+    standard_model: "deepseek-v4-flash"
+  claude_cli:
+    fast_model: "claude-haiku-4-5-20251001"
+    standard_model: "claude-sonnet-4-6"
+  local:
+    enabled: false
+    base_url: "http://localhost:11434/v1"
+    fast_model: "qwen2.5:7b"
+    standard_model: "qwen2.5:14b"
+  daily_token_budget: 0  # 0 = unlimited
+
+notification:
+  schedule: "08:00"
+  channels:
+    slack:
+      enabled: false
+      webhook_url: "${SLACK_WEBHOOK_URL}"
+    wechat:
+      enabled: false
+      webhook_url: "${WECHAT_WEBHOOK_URL}"
+    email:
+      enabled: true
+      smtp_host: "smtp.gmail.com"
+      smtp_port: 465
+      sender: "${GMAIL_SENDER}"
+      password: "${GMAIL_APP_PASSWORD}"
+      recipients: "${EMAIL_RECIPIENTS}"
+
+output:
+  daily_dir: "./output/daily"
+  weekly_dir: "./output/weekly"
+
+audio:
+  enabled: true
+  voices:
+    zh: "zh-CN-XiaoxiaoNeural"   # female, most natural Edge voice
+    en: "en-US-GuyNeural"
+  tts_rate: "+15%"               # playback speed: +15% ≈ shave 13% off duration
+  script:
+    highlight_count: 5
+    tier1_max_items: 15
+  output:
+    audio_dir: "./output/weekly/audio"
+    video_dir: "./output/weekly/video"
+  video:
+    resolution: [1920, 1080]
+    bg_color_start: "#1a1a2e"
+    bg_color_end: "#16213e"
+    accent_color: "#e94560"
+  upload:
+    targets:
+      - bilibili
+      - youtube
+    tags: ["AI", "LLM", "weekly", "engineering practice"]
+
+storage:
+  db_path: "./data/aiteller.db"
+  retention_days_raw: 30
+  retention_days_processed: 90
+
+logging:
+  level: "INFO"
+  file: "./logs/aiteller.log"
+  max_size_mb: 50
+  backup_count: 5

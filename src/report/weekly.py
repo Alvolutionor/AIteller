@@ -12,7 +12,7 @@ from pathlib import Path
 
 from fpdf import FPDF
 
-from src.prompts.filter import CATEGORIES, CATEGORY_IDS, TIER_MAP
+from src.prompts.filter import CATEGORIES, CATEGORY_IDS, TIER_MAP, CATEGORY_ORDER
 from src.report.i18n import get_strings, get_category_name
 
 logger = logging.getLogger(__name__)
@@ -199,7 +199,10 @@ def _category_distribution_rows(items: list[dict], sources: list[str], include_n
             }
         )
 
-    rows.sort(key=lambda row: (row["tier"], -row["total"], row["category_name"]))
+    # Mirror the fixed section order so the distribution table reads in the
+    # same sequence as the rendered sections (core → practice → build).
+    order_pos = {cid: i for i, cid in enumerate(CATEGORY_ORDER)}
+    rows.sort(key=lambda row: (row["tier"], order_pos.get(row["category_id"], len(CATEGORY_ORDER))))
     return rows
 
 
@@ -212,13 +215,17 @@ def _group_items_by_tier_and_category(items: list[dict]) -> dict[int, dict[str, 
 
     result: dict[int, dict[str, list[dict]]] = {}
     for tier, categories in grouped.items():
-        ordered_categories = sorted(
-            categories.items(),
-            key=lambda entry: (-len(entry[1]), -max(_score(item) for item in entry[1]), _category_name(entry[0])),
-        )
+        # Fixed section order: within a tier, sections appear in the
+        # deterministic CATEGORY_ORDER (not by count/score), so the core
+        # "using-AI" sections are always on top and build/training is
+        # always last. Items within a section are still sorted by score.
+        ordered_ids = [cid for cid in CATEGORY_ORDER if cid in categories]
+        # Any category not listed in CATEGORY_ORDER (defensive) goes last,
+        # alphabetically, so nothing silently disappears.
+        ordered_ids += sorted(cid for cid in categories if cid not in CATEGORY_ORDER)
         result[tier] = {}
-        for category_id, category_items in ordered_categories:
-            result[tier][category_id] = sorted(category_items, key=_score, reverse=True)
+        for category_id in ordered_ids:
+            result[tier][category_id] = sorted(categories[category_id], key=_score, reverse=True)
     return result
 
 
@@ -293,12 +300,23 @@ def _build_meta_text(item: dict) -> str:
     return _clean_pdf_text(" · ".join(part for part in parts if part))
 
 
+# ponytail: mobile = one narrow tall page format + 1 column + bigger type.
+# Same renderer, no HTML/CSS pipeline. Size is a phone-screen aspect (~9:16)
+# so a PDF reader fits the page width with no pinch-zoom.
+MOBILE_FORMAT = (105, 187)
+
+
 class WeeklyReportPDF(FPDF):
-    def __init__(self, lang: str = "en"):
-        super().__init__(orientation="L", format="A4")
+    def __init__(self, lang: str = "en", mobile: bool = False):
+        if mobile:
+            super().__init__(orientation="P", format=MOBILE_FORMAT)
+        else:
+            super().__init__(orientation="L", format="A4")
+        self.mobile = mobile
         self._s = get_strings(lang)
         self._zh = self._setup_fonts()
-        self.set_margins(10, 10, 10)
+        margin = 6 if mobile else 10
+        self.set_margins(margin, margin, margin)
         self.set_auto_page_break(auto=False)
 
     def _setup_fonts(self) -> str:
@@ -339,9 +357,10 @@ class WeeklyReportPDF(FPDF):
 class WeeklyReportGenerator:
     """Generate weekly PDF report with experiment-style statistics and dense layout."""
 
-    def __init__(self, config: dict, lang: str = "en"):
+    def __init__(self, config: dict, lang: str = "en", mobile: bool = False):
         self.config = config
         self.lang = lang
+        self.mobile = mobile
         self._s = get_strings(lang)
         self.output_dir = Path(config.get("output", {}).get("weekly_dir", "./output/weekly"))
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -352,7 +371,7 @@ class WeeklyReportGenerator:
         _lang = self.lang
         s = self._s
 
-        pdf = WeeklyReportPDF(lang=self.lang)
+        pdf = WeeklyReportPDF(lang=self.lang, mobile=self.mobile)
         pdf.add_page()
         self._render_cover_page(pdf, items, week_start, week_end, raw_counts=raw_counts)
 
@@ -364,24 +383,34 @@ class WeeklyReportGenerator:
             self._render_tier_section(pdf, tier, categories)
 
         filename = s["weekly_filename"].format(start=week_start, end=week_end)
+        if self.mobile:
+            filename = filename.replace(".pdf", "_mobile.pdf")
         output_path = self.output_dir / filename
         pdf.output(str(output_path))
         logger.info("Weekly report generated: %s (%d items)", output_path, len(items))
         return output_path
 
+    @staticmethod
+    def _cover_break_if_needed(pdf: WeeklyReportPDF, needed: float):
+        if pdf.get_y() + needed > pdf.h - 14:
+            pdf.add_page()
+            pdf.set_y(pdf.get_y() + 4)
+
     def _render_cover_page(self, pdf: WeeklyReportPDF, items: list[dict], week_start: str, week_end: str,
                            raw_counts: dict[str, int] | None = None):
         zh = pdf._zh
         s = self._s
+        m = pdf.l_margin
+        banner_h = 24 if pdf.mobile else 28
         pdf.set_fill_color(15, 23, 42)
-        pdf.rect(10, 10, pdf.w - 20, 28, style="F")
-        pdf.set_xy(16, 17)
-        pdf.set_font(zh, "B", 24)
+        pdf.rect(m, m, pdf.w - 2 * m, banner_h, style="F")
+        pdf.set_xy(m + 5, m + 5)
+        pdf.set_font(zh, "B", 15 if pdf.mobile else 24)
         pdf.set_text_color(255, 255, 255)
-        pdf.cell(0, 10, s["weekly_title"])
-        pdf.ln(11)
-        pdf.set_x(16)
-        pdf.set_font(zh, "", 11)
+        pdf.cell(0, 8, s["weekly_title"])
+        pdf.ln(9)
+        pdf.set_x(m + 5)
+        pdf.set_font(zh, "", 8 if pdf.mobile else 11)
         pdf.set_text_color(203, 213, 225)
         pdf.cell(0, 6, s["weekly_subtitle"].format(start=week_start, end=week_end, count=len(items)))
 
@@ -402,26 +431,47 @@ class WeeklyReportGenerator:
         if other_count > 0:
             cards.append(("other", other_count))
 
-        card_y = 42
-        usable_w = pdf.w - 20
-        gap = 4
-        card_w = (usable_w - gap * (len(cards) - 1)) / len(cards)
+        m = pdf.l_margin
+        card_y = pdf.get_y() + 6
+        usable_w = pdf.w - 2 * m
+        gap = 3 if pdf.mobile else 4
+        per_row = 2 if pdf.mobile else len(cards)
+        card_w = (usable_w - gap * (per_row - 1)) / per_row
+        card_h = 15 if pdf.mobile else 18
 
+        last_row_n = len(cards) % per_row or per_row
         for index, (category_id, count) in enumerate(cards):
-            x = 10 + index * (card_w + gap)
+            col, row = index % per_row, index // per_row
+            in_last_row = row == (len(cards) - 1) // per_row
+            row_n = last_row_n if in_last_row else per_row
+            offset = (usable_w - (row_n * card_w + gap * (row_n - 1))) / 2
+            x = m + offset + col * (card_w + gap)
+            y = card_y + row * (card_h + gap)
             pdf.set_fill_color(248, 250, 252)
             pdf.set_draw_color(226, 232, 240)
-            pdf.rect(x, card_y, card_w, 18, style="FD")
-            pdf.set_xy(x, card_y + 2)
-            pdf.set_font(zh, "B", 15)
+            pdf.rect(x, y, card_w, card_h, style="FD")
+
+            label = self._s["weekly_other"] if category_id == "other" else _category_name(category_id)
+            label = _clean_pdf_text(label)
+            # cell() auto-wraps at the page right margin, which shifted the
+            # right-hand card's text out of its box. Draw inside the rect
+            # with the margin lifted, then restore it.
+            saved_r = pdf.r_margin
+            pdf.r_margin = 0
+            pdf.set_xy(x, y + 2)
+            pdf.set_font(zh, "B", 13 if pdf.mobile else 15)
             pdf.set_text_color(30, 64, 175 if category_id == "other" else 30)
             pdf.cell(card_w, 6, str(count), align="C")
-            pdf.ln(6)
-            pdf.set_x(x)
-            pdf.set_font(zh, "", 8)
+            pdf.set_xy(x, y + 8)
+            pdf.set_font(zh, "", 7 if pdf.mobile else 8)
             pdf.set_text_color(71, 85, 105)
-            label = self._s["weekly_other"] if category_id == "other" else _category_name(category_id)
-            pdf.cell(card_w, 5, _clean_pdf_text(label), align="C")
+            while label and pdf.get_string_width(label) > card_w - 2:
+                label = label[:-1]
+            pdf.cell(card_w, 5, label, align="C")
+            pdf.r_margin = saved_r
+
+        rows_used = (len(cards) + per_row - 1) // per_row
+        pdf.set_y(card_y + rows_used * (card_h + gap))
 
     def _render_source_overview(self, pdf: WeeklyReportPDF, items: list[dict],
                                raw_counts: dict[str, int] | None = None):
@@ -429,21 +479,23 @@ class WeeklyReportGenerator:
         s = self._s
         src_names = s["sources"]
         stats = _source_stats(items)
-        y = 66
+        m = pdf.l_margin
 
-        pdf.set_xy(10, y)
-        pdf.set_font(zh, "B", 12)
+        pdf.set_xy(m, pdf.get_y() + 2)
+        pdf.set_font(zh, "B", 10 if pdf.mobile else 12)
         pdf.set_text_color(15, 23, 42)
         pdf.cell(0, 7, s["weekly_source_overview"], new_x="LMARGIN", new_y="NEXT")
 
         has_raw = raw_counts and any(raw_counts.values())
         if has_raw:
-            widths = [40, 24, 24, 24]
             headers = s["weekly_source_headers_full"]
+            ratios = [40, 24, 24, 24]
         else:
-            widths = [48, 28, 26]
             headers = s["weekly_source_headers"]
-        table_x = 10
+            ratios = [48, 28, 26]
+        table_w = (pdf.w - 2 * m) if pdf.mobile else sum(ratios)
+        widths = [table_w * r / sum(ratios) for r in ratios]
+        table_x = m
         table_y = pdf.get_y()
 
         pdf.set_fill_color(241, 245, 249)
@@ -464,6 +516,8 @@ class WeeklyReportGenerator:
         total_raw = 0
         total_passed = 0
         for source in all_sources:
+            if pdf.mobile:
+                self._cover_break_if_needed(pdf, 6)
             pdf.set_x(table_x)
             pdf.set_text_color(51, 65, 85)
             stat_row = next((r for r in stats if r["source"] == source), None)
@@ -498,14 +552,23 @@ class WeeklyReportGenerator:
 
         left_bottom_y = pdf.get_y()
 
-        pdf.set_xy(118, table_y - 7)
-        pdf.set_font(zh, "B", 12)
+        if pdf.mobile:
+            self._cover_break_if_needed(pdf, 26)
+            left_bottom_y = pdf.get_y()
+            notes_x, notes_y, notes_w = m, left_bottom_y + 3, pdf.w - 2 * m
+        else:
+            notes_x, notes_y, notes_w = m + 108, table_y - 7, pdf.w - m - (m + 108)
+
+        pdf.set_xy(notes_x, notes_y)
+        pdf.set_font(zh, "B", 10 if pdf.mobile else 12)
         pdf.set_text_color(15, 23, 42)
         pdf.cell(0, 7, s["weekly_notes_title"], new_x="LMARGIN", new_y="NEXT")
-        pdf.set_x(118)
-        pdf.set_font(zh, "", 8.5)
+        pdf.set_x(notes_x)
+        pdf.set_font(zh, "", 7.5 if pdf.mobile else 8.5)
         pdf.set_text_color(71, 85, 105)
-        pdf.multi_cell(168, 5, _clean_pdf_text(s["weekly_notes_body"]))
+        notes_key = "weekly_notes_body_mobile" if pdf.mobile else "weekly_notes_body"
+        pdf.multi_cell(notes_w, 4.5 if pdf.mobile else 5,
+                       _clean_pdf_text(s.get(notes_key) or s["weekly_notes_body"]), align="L")
         right_bottom_y = pdf.get_y()
 
         pdf.set_y(max(left_bottom_y, right_bottom_y) + 4)
@@ -513,7 +576,9 @@ class WeeklyReportGenerator:
     def _render_category_distribution(self, pdf: WeeklyReportPDF, items: list[dict]):
         zh = pdf._zh
         s = self._s
-        pdf.set_font(zh, "B", 12)
+        if pdf.mobile:
+            self._cover_break_if_needed(pdf, 40)
+        pdf.set_font(zh, "B", 10 if pdf.mobile else 12)
         pdf.set_text_color(15, 23, 42)
         pdf.cell(0, 7, s["weekly_category_dist"], new_x="LMARGIN", new_y="NEXT")
 
@@ -535,14 +600,18 @@ class WeeklyReportGenerator:
         ]
         sources = preferred_sources + extra_sources
         rows = _category_distribution_rows(items, sources, include_novelty=False)
+        if pdf.mobile:
+            sources = []
         novelty_count = sum(1 for item in items if _get_category(item) == "novelty")
 
         total_w = pdf.w - pdf.l_margin - pdf.r_margin
-        category_w = 47
         total_col_w = 16
+        category_w = (total_w - total_col_w) if pdf.mobile else 47
         source_w = (total_w - category_w - total_col_w) / max(1, len(sources))
+        head_size = 8.5 if pdf.mobile else 7.6
+        body_size = 8.5 if pdf.mobile else 7.4
 
-        pdf.set_font(zh, "B", 7.6)
+        pdf.set_font(zh, "B", head_size)
         pdf.set_fill_color(241, 245, 249)
         pdf.set_text_color(15, 23, 42)
         pdf.cell(category_w, 7, s["weekly_category_header"], border=1, fill=True, align="C")
@@ -551,26 +620,31 @@ class WeeklyReportGenerator:
         pdf.cell(total_col_w, 7, s["weekly_total"], border=1, fill=True, align="C")
         pdf.ln(7)
 
-        pdf.set_font(zh, "", 7.4)
+        pdf.set_font(zh, "", body_size)
         tier_labels = s["tier_weekly"]
         for row in rows:
             tier = row["tier"]
+            if pdf.mobile:
+                self._cover_break_if_needed(pdf, 6)
             pdf.set_x(pdf.l_margin)
             pdf.set_fill_color(*tier_labels[tier][2])
             pdf.set_text_color(15, 23, 42)
             pdf.cell(category_w, 6, _clean_pdf_text(row["category_name"]), border=1, fill=True)
             for source in sources:
                 pdf.cell(source_w, 6, str(row["counts"][source]), border=1, align="C")
-            pdf.set_font(zh, "B", 7.4)
+            pdf.set_font(zh, "B", body_size)
             pdf.cell(total_col_w, 6, str(row["total"]), border=1, align="C")
-            pdf.set_font(zh, "", 7.4)
+            pdf.set_font(zh, "", body_size)
             pdf.ln(6)
 
         if novelty_count:
             pdf.ln(2)
             pdf.set_font(zh, "", 8)
             pdf.set_text_color(100, 116, 139)
-            pdf.cell(0, 5, s["weekly_novelty_note"].format(count=novelty_count))
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(pdf.w - pdf.l_margin - pdf.r_margin, 4.5,
+                           _clean_pdf_text(s["weekly_novelty_note"].format(count=novelty_count)),
+                           align="L")
 
     def _render_tier_section(self, pdf: WeeklyReportPDF, tier: int, categories: dict[str, list[dict]]):
         tier_total = sum(len(group) for group in categories.values())
@@ -593,7 +667,7 @@ class WeeklyReportGenerator:
         pdf.set_fill_color(*color)
         pdf.rect(pdf.l_margin, pdf.get_y(), pdf.w - pdf.l_margin - pdf.r_margin, 9, style="F")
         pdf.set_xy(pdf.l_margin + 4, pdf.get_y() + 1.5)
-        pdf.set_font(zh, "B", 12)
+        pdf.set_font(zh, "B", 11 if pdf.mobile else 12)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(0, 6, f"{title} ({tier_total})")
         pdf.ln(10)
@@ -605,31 +679,44 @@ class WeeklyReportGenerator:
         pdf.set_draw_color(226, 232, 240)
         pdf.rect(pdf.l_margin, pdf.get_y(), pdf.w - pdf.l_margin - pdf.r_margin, 7, style="FD")
         pdf.set_xy(pdf.l_margin + 3, pdf.get_y() + 1)
-        pdf.set_font(zh, "B", 10)
+        pdf.set_font(zh, "B", 10 if not pdf.mobile else 9.5)
         pdf.set_text_color(*color)
         pdf.cell(0, 5, f"{_category_name(category_id)} ({count})")
         pdf.ln(7.5)
 
+    @staticmethod
+    def _type_scale(pdf: WeeklyReportPDF) -> dict:
+        if pdf.mobile:
+            return {"title": 11, "title_lh": 5.2, "body": 9.5, "body_lh": 4.8,
+                    "meta": 8, "meta_lh": 4.2, "summary_max": 360}
+        return {"title": 9.2, "title_lh": 4.2, "body": 8, "body_lh": 3.8,
+                "meta": 7, "meta_lh": 3.4, "summary_max": 360}
+
     def _measure_item_height(self, pdf: WeeklyReportPDF, col_w: float, item: dict) -> float:
         zh = pdf._zh
+        t = self._type_scale(pdf)
         title, summary = _extract_display_content(item)
         meta = _build_meta_text(item)
 
         title_w = col_w - 14
-        pdf.set_font(zh, "B", 9.2)
-        title_h = pdf.multi_cell(title_w, 4.2, title or get_strings(_lang)["no_title"], dry_run=True, output="HEIGHT")
+        pdf.set_font(zh, "B", t["title"])
+        title_h = pdf.multi_cell(title_w, t["title_lh"], title or get_strings(_lang)["no_title"],
+                                 align="L", dry_run=True, output="HEIGHT")
         summary_h = 0.0
         if summary:
-            pdf.set_font(zh, "", 8)
-            summary_h = pdf.multi_cell(col_w, 3.8, summary[:360], dry_run=True, output="HEIGHT")
+            pdf.set_font(zh, "", t["body"])
+            summary_h = pdf.multi_cell(col_w, t["body_lh"], summary[:t["summary_max"]],
+                                       align="L", dry_run=True, output="HEIGHT")
         meta_h = 0.0
         if meta:
-            pdf.set_font(zh, "", 7)
-            meta_h = pdf.multi_cell(col_w, 3.4, meta, dry_run=True, output="HEIGHT")
+            pdf.set_font(zh, "", t["meta"])
+            meta_h = pdf.multi_cell(col_w, t["meta_lh"], meta, align="L",
+                                    dry_run=True, output="HEIGHT")
         return 4 + max(18.0, title_h + summary_h + meta_h + 4)
 
     def _render_item_block(self, pdf: WeeklyReportPDF, x: float, y: float, col_w: float, item: dict):
         zh = pdf._zh
+        t = self._type_scale(pdf)
         score = _score(item)
         title, summary = _extract_display_content(item)
         meta = _build_meta_text(item)
@@ -638,21 +725,22 @@ class WeeklyReportGenerator:
         _render_score_badge(pdf, zh, x, y, score)
 
         pdf.set_xy(x + 14, y)
-        pdf.set_font(zh, "B", 9.2)
+        pdf.set_font(zh, "B", t["title"])
         pdf.set_text_color(30, 41, 59)
-        pdf.multi_cell(col_w - 14, 4.2, title or get_strings(_lang)["no_title"], link=url or "")
+        pdf.multi_cell(col_w - 14, t["title_lh"], title or get_strings(_lang)["no_title"],
+                       align="L", link=url or "")
 
         if summary:
             pdf.set_x(x)
-            pdf.set_font(zh, "", 8)
+            pdf.set_font(zh, "", t["body"])
             pdf.set_text_color(71, 85, 105)
-            pdf.multi_cell(col_w, 3.8, summary[:360])
+            pdf.multi_cell(col_w, t["body_lh"], summary[:t["summary_max"]], align="L")
 
         if meta:
             pdf.set_x(x)
-            pdf.set_font(zh, "", 7)
+            pdf.set_font(zh, "", t["meta"])
             pdf.set_text_color(148, 163, 184)
-            pdf.multi_cell(col_w, 3.4, meta)
+            pdf.multi_cell(col_w, t["meta_lh"], meta, align="L")
 
     def _render_two_column_items(
         self,
@@ -662,13 +750,14 @@ class WeeklyReportGenerator:
         category_id: str,
         items: list[dict],
     ):
+        cols = 1 if pdf.mobile else 2
         col_gap = 6
-        col_w = (pdf.w - pdf.l_margin - pdf.r_margin - col_gap) / 2
-        bottom_limit = pdf.h - 14
+        col_w = (pdf.w - pdf.l_margin - pdf.r_margin - col_gap * (cols - 1)) / cols
+        bottom_limit = pdf.h - (12 if pdf.mobile else 14)
 
-        for index in range(0, len(items), 2):
+        for index in range(0, len(items), cols):
             left = items[index]
-            right = items[index + 1] if index + 1 < len(items) else None
+            right = items[index + 1] if cols == 2 and index + 1 < len(items) else None
 
             row_h = self._measure_item_height(pdf, col_w, left)
             if right:

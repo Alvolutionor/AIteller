@@ -17,7 +17,9 @@ if _env_file.exists():
                 _key, _, _val = _line.partition("=")
                 _key = _key.strip()
                 _val = _val.strip()
-                if _key and _key not in os.environ:
+                if _key:
+                    if _val.startswith('"') and _val.endswith('"'):
+                        _val = _val[1:-1]
                     os.environ[_key] = _val
 
 class ConfigError(Exception):

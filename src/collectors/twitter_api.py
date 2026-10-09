@@ -466,12 +466,14 @@ class TwitterAPICollector(BaseCollector):
         items = []
         since_ts = since.timestamp()
 
-        instructions = (data.get("data", {})
-                        .get("user", {})
-                        .get("result", {})
-                        .get("timeline_v2", {})
-                        .get("timeline", {})
-                        .get("instructions", []))
+        # Twitter's GraphQL UserTweets response wraps the timeline as
+        # user.result.timeline.timeline.instructions (no _v2 prefix —
+        # despite withV2Timeline=True in the request variables).
+        result = (data.get("data", {})
+                  .get("user", {})
+                  .get("result", {}))
+        timeline_root = result.get("timeline_v2") or result.get("timeline") or {}
+        instructions = timeline_root.get("timeline", {}).get("instructions", [])
 
         for instruction in instructions:
             for entry in instruction.get("entries", []):

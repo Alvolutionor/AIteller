@@ -23,7 +23,7 @@ twitter:
   - name: "Jason Wei"
     handle: "jasonwei20"
   - name: "Jeremy Howard"
-    handle: "jeaborneow"
+    handle: "jeremyphoward"
   - name: "Hamel Husain"
     handle: "HamelHusain"
   - name: "Jason Liu"
@@ -40,7 +40,7 @@ twitter:
   - name: "Cursor"
     handle: "cursor_ai"
   - name: "Aider"
-    handle: "paabornes"
+    handle: "paulgauthier"
   - name: "Alex Albert (Claude)"
     handle: "alexalbert__"
   - name: "Erik Schluntz (Anthropic)"
@@ -50,7 +50,7 @@ twitter:
   - name: "Thorsten Ball"
     handle: "thorstenball"
   - name: "Devin AI"
-    handle: "cognaboron_ai"
+    handle: "cognition_labs"
   # --- AI Companies ---
   - name: "Anthropic"
     handle: "AnthropicAI"
@@ -69,30 +69,30 @@ twitter:
   - name: "Weights & Biases"
     handle: "weights_biases"
   - name: "Replicate"
-    handle: "replaboricate"
+    handle: "replicate"
   - name: "Together AI"
-    handle: "toaborgethercompute"
+    handle: "togethercompute"
   - name: "Vercel AI"
     handle: "vercel"
   - name: "Pinecone"
-    handle: "pinaborecone"
+    handle: "pinecone"
   # --- AI Practitioners / Builders ---
   - name: "McKay Wrigley"
-    handle: "mcaborkaywrigley"
+    handle: "mckaywrigley"
   - name: "Pieter Levels"
     handle: "levelsio"
   - name: "Guillermo Rauch"
     handle: "rauchg"
   - name: "Greg Brockman"
-    handle: "gabordb"
+    handle: "gdb"
   - name: "Yann LeCun"
-    handle: "ylaborecun"
+    handle: "ylecun"
   - name: "François Chollet"
     handle: "fchollet"
   - name: "George Hotz"
-    handle: "gaboreohotz"
+    handle: "geohot"
   - name: "Jack Clark"
-    handle: "jackclaborarksfj"
+    handle: "jackclarkSF"
   - name: "Emad Mostaque"
     handle: "EMostaque"
   # --- AI Lab Leaders ---
@@ -195,6 +195,56 @@ youtube:
     channel_id: "UCbfYPyITQ-7l4upoX8nvctg"
 
 bilibili: []
+
+# ── Tech Media RSS Feeds ──
+media:
+  # Major tech media
+  - name: "TechCrunch AI"
+    url: "https://techcrunch.com/category/artificial-intelligence/feed/"
+  - name: "VentureBeat AI"
+    url: "https://venturebeat.com/category/ai/feed/"
+  - name: "The Verge AI"
+    url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"
+  - name: "Wired AI"
+    url: "https://www.wired.com/feed/tag/ai/latest/rss"
+  - name: "Ars Technica AI"
+    url: "https://feeds.arstechnica.com/arstechnica/features"
+  - name: "MIT Technology Review"
+    url: "https://www.technologyreview.com/feed/"
+  - name: "IEEE Spectrum AI"
+    url: "https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss"
+  - name: "InfoQ AI/ML"
+    url: "https://feed.infoq.com/ai-ml-data-eng/"
+  - name: "The New Stack AI"
+    url: "https://thenewstack.io/category/ai/feed/"
+  - name: "ZDNet AI"
+    url: "https://www.zdnet.com/topic/artificial-intelligence/rss.xml"
+  - name: "Analytics India Magazine"
+    url: "https://analyticsindiamag.com/feed/"
+  - name: "Synced (机器之心英文版)"
+    url: "https://syncedreview.com/feed/"
+  # Chinese tech media
+  - name: "AI科技评论 (雷锋网)"
+    url: "https://www.leiphone.com/feed"
+  - name: "InfoQ 中文"
+    url: "https://www.infoq.cn/feed"
+  - name: "CSDN AI"
+    url: "https://blog.csdn.net/nav/ai/feed"
+  # AI-specific media
+  - name: "SiliconAngle AI"
+    url: "https://siliconangle.com/category/artificial-intelligence/feed/"
+  - name: "Marktechpost"
+    url: "https://www.marktechpost.com/feed/"
+  - name: "AI Business"
+    url: "https://aibusiness.com/rss.xml"
+
+# ── LinkedIn (newsletter RSS feeds) ──
+linkedin: []
+  # Add LinkedIn newsletter RSS feeds here as you discover them.
+  # Format:
+  #   - name: "Newsletter Name"
+  #     url: "https://www.linkedin.com/pulse/feed/urn:li:newsletter:NEWSLETTER_ID"
+  # The collector also searches Google News for site:linkedin.com AI articles.
 
 blogs:
   # ── English blogs (AI/LLM focused) ──

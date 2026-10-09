@@ -28,6 +28,10 @@ STRINGS = {
             "Content is organized in a dense two-column layout, sorted by Tier > Category > Score "
             "for quick scanning."
         ),
+        "weekly_notes_body_mobile": (
+            "This report uses a tiered category system with a 0-10 scoring scale. "
+            "Content is a single-column phone layout, sorted by Tier > Category > Score."
+        ),
         "weekly_category_dist": "Category Distribution",
         "weekly_category_header": "Category",
         "weekly_total": "Total",
@@ -111,6 +115,10 @@ STRINGS = {
             "本报告沿用 experiment_results 的分类体系，保留 5.x / 6.x 十分制分数。"
             "正文采用对称双栏高密度列表，按 Tier → 分类 → 分数排序，便于快速扫读。"
         ),
+        "weekly_notes_body_mobile": (
+            "本报告沿用 experiment_results 的分类体系，保留十分制分数。"
+            "正文为手机单栏版式，按 Tier → 分类 → 分数排序。"
+        ),
         "weekly_category_dist": "分类分布",
         "weekly_category_header": "分类",
         "weekly_total": "总计",
@@ -172,31 +180,31 @@ STRINGS = {
 # Category names in both languages
 CATEGORY_NAMES = {
     "en": {
-        "enterprise_arch": "Enterprise Architecture",
-        "personal_exp": "Personal Experience",
-        "personal_workflow": "Workflows",
-        "postmortem": "Postmortems",
-        "tool_comparison": "Tool Comparisons",
+        "personal_workflow": "AI Tool Usage & Workflows",
         "prompt_agent": "Prompt/Agent Engineering",
-        "deploy_finetune": "Deploy/Fine-tuning",
-        "rag_retrieval": "RAG/Retrieval",
-        "ai_vertical": "AI + Industry",
-        "opensource_tool": "Open Source Tools",
+        "tool_comparison": "Model & Tool Selection",
+        "personal_exp": "Productivity with AI",
         "team_process": "Team Process",
+        "rag_retrieval": "RAG/Retrieval",
+        "postmortem": "Postmortems",
+        "opensource_tool": "Open Source Tools",
+        "enterprise_arch": "Enterprise Architecture",
+        "ai_vertical": "AI + Industry",
+        "deploy_finetune": "Training/Fine-tuning/Deploy",
         "novelty": "Novelty/Experiments",
     },
     "zh": {
-        "enterprise_arch": "公司架构层面",
-        "personal_exp": "个人使用经验",
-        "personal_workflow": "个人实践工作流",
-        "postmortem": "故障/踩坑复盘",
-        "tool_comparison": "工具对比评测",
+        "personal_workflow": "AI 工具用法与工作流",
         "prompt_agent": "Prompt/Agent 工程",
-        "deploy_finetune": "模型部署/微调",
-        "rag_retrieval": "RAG/检索系统",
-        "ai_vertical": "AI+垂直行业",
-        "opensource_tool": "开源项目/工具",
+        "tool_comparison": "模型/工具选型对比",
+        "personal_exp": "生产力提升经验",
         "team_process": "团队协作/流程",
+        "rag_retrieval": "RAG/检索系统",
+        "postmortem": "故障/踩坑复盘",
+        "opensource_tool": "开源项目/工具",
+        "enterprise_arch": "企业架构",
+        "ai_vertical": "AI+垂直行业",
+        "deploy_finetune": "模型部署/微调/训练",
         "novelty": "花边/创意实验",
     },
 }

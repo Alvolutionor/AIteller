@@ -28,8 +28,10 @@ class EmailNotifier(BaseNotifier):
             self.recipients = raw_recipients
 
     async def send(self, digest: str, compact_digest: str = None,
-                   attachment: str | Path = None, subject: str = None) -> bool:
-        if not self.sender or not self.password or not self.recipients:
+                   attachment: str | Path = None, subject: str = None,
+                   recipients_override: list[str] | None = None) -> bool:
+        recipients = recipients_override if recipients_override is not None else self.recipients
+        if not self.sender or not self.password or not recipients:
             logger.warning("Email not configured (missing sender/password/recipients)")
             return False
 
@@ -37,7 +39,7 @@ class EmailNotifier(BaseNotifier):
             msg = MIMEMultipart("mixed")
             msg["Subject"] = subject or "AIteller AI实践日报"
             msg["From"] = self.sender
-            msg["To"] = ", ".join(self.recipients)
+            msg["To"] = ", ".join(recipients)
 
             # Text body
             body = MIMEMultipart("alternative")
@@ -58,9 +60,9 @@ class EmailNotifier(BaseNotifier):
             context = ssl.create_default_context()
             with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, context=context) as server:
                 server.login(self.sender, self.password)
-                server.sendmail(self.sender, self.recipients, msg.as_string())
+                server.sendmail(self.sender, recipients, msg.as_string())
 
-            logger.info("Email sent to %d recipients", len(self.recipients))
+            logger.info("Email sent to %d recipients", len(recipients))
             return True
         except Exception as e:
             logger.error("Email notification failed: %s", e)

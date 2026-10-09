@@ -33,11 +33,31 @@ class HFPapersCollector(BaseCollector):
 
         try:
             async with aiohttp.ClientSession() as session:
-                params = {"limit": 100}
-                data = await self._fetch_json(session, HF_DAILY_PAPERS_API, params=params)
+                # ponytail: one request per day back to `since`; the API caps a
+                # single call at ~100 papers, which silently truncates windows
+                # longer than a few days.
+                days = (datetime.now(timezone.utc) - effective_since).days + 1
+                data = []
+                seen_ids = set()
+                for d in range(days):
+                    day = (datetime.now(timezone.utc) - timedelta(days=d)).strftime("%Y-%m-%d")
+                    try:
+                        chunk = await self._fetch_json(
+                            session, HF_DAILY_PAPERS_API,
+                            params={"date": day, "limit": 100},
+                        )
+                    except aiohttp.ClientResponseError:
+                        continue
+                    if not isinstance(chunk, list):
+                        continue
+                    for e in chunk:
+                        key = e.get("paper", {}).get("id") or e.get("title", "")
+                        if key and key not in seen_ids:
+                            seen_ids.add(key)
+                            data.append(e)
 
-                if not isinstance(data, list):
-                    logger.warning("HFPapers: unexpected response format")
+                if not data:
+                    logger.warning("HFPapers: no papers returned")
                     return []
 
                 since_ts = effective_since.timestamp()

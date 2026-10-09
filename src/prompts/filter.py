@@ -2,39 +2,89 @@
 """Shared filter/categorization/scoring prompts and category definitions."""
 
 CATEGORIES = {
-    "enterprise_arch":    "公司架构层面 — 企业级 AI 系统设计、基础设施选型、大规模部署",
-    "personal_exp":       "个人使用经验 — 个人用 AI 工具的心得、踩坑、反直觉发现",
-    "personal_workflow":  "个人实践工作流 — 完整的工作流分享、效率提升方法、工具链组合",
-    "postmortem":         "故障/踩坑复盘 — 失败案例、Bug 分析、事故复盘、教训总结",
-    "tool_comparison":    "工具对比评测 — 有深度实测数据的工具对比，非泛泛 A vs B",
+    # Core: best practice for using AI
+    "personal_workflow":  "AI 工具用法与工作流 — Claude Code/Cursor/Copilot 等工具实战用法、提效工作流、工具链组合",
     "prompt_agent":       "Prompt/Agent 工程 — prompt 设计、agent 编排、tool use 的实操技巧",
-    "deploy_finetune":    "模型部署/微调 — 本地部署、fine-tuning、量化、推理优化实战",
-    "rag_retrieval":      "RAG/检索系统 — 向量库、检索增强生成、embedding 的工程实践",
-    "ai_vertical":        "AI+垂直行业 — AI 在医疗/金融/法律/教育/制造等领域的真实落地",
-    "opensource_tool":    "开源项目/工具 — 值得关注的新开源项目实测、源码解析",
+    "tool_comparison":    "模型/工具选型对比 — 深度实测的模型能力对比、什么场景用哪个模型/工具",
+    "personal_exp":       "生产力提升经验 — 个人用 AI 提效的心得、踩坑、反直觉发现",
+    # Practice: adjacent hands-on
     "team_process":       "团队协作/流程 — AI 融入团队开发流程、code review、CI/CD",
+    "rag_retrieval":      "RAG/检索系统 — 向量库、检索增强生成、embedding 的工程实践",
+    "postmortem":         "故障/踩坑复盘 — 失败案例、Bug 分析、事故复盘、教训总结",
+    "opensource_tool":    "开源项目/工具 — 值得关注的新开源项目实测、源码解析",
+    # Build: how AI is made (kept, ranked last)
+    "enterprise_arch":    "企业架构 — 企业级 AI 系统设计、基础设施选型、大规模部署",
+    "ai_vertical":        "AI+垂直行业 — AI 在医疗/金融/法律/教育/制造等领域的真实落地",
+    "deploy_finetune":    "模型部署/微调/训练 — 从零训练、fine-tuning、量化、推理优化、本地部署实战",
     "novelty":            "花边/创意实验 — 有趣但非工程实践的创意 demo、概念验证、艺术项目",
 }
 
 CATEGORY_IDS = list(CATEGORIES.keys())
 
+# Tiers reflect "best practice for USING AI" priority, not "how AI is
+# built". Tier 1 (core) = directly helps a practitioner use AI better
+# day-to-day: tool usage / workflows, model selection, prompt/agent
+# engineering, productivity experience. Tier 2 (practice) = adjacent
+# hands-on engineering. Tier 3 (build) = building/training/deploying AI
+# systems — kept but ranked last. Tier 0 = novelty.
 TIER_MAP = {
-    # Tier 1: Specific practice experience
-    "personal_exp": 1,
-    "personal_workflow": 1,
-    "postmortem": 1,
-    "team_process": 1,
-    # Tier 2: Technical with hands-on
-    "prompt_agent": 2,
+    # Tier 1: CORE — how to best use AI / which model to use
+    "personal_workflow": 1,   # AI tool usage & workflows
+    "prompt_agent": 1,        # prompt / agent engineering
+    "tool_comparison": 1,     # model & tool selection / comparison
+    "personal_exp": 1,        # productivity experience using AI
+    # Tier 2: PRACTICE — adjacent hands-on engineering
+    "team_process": 2,
     "rag_retrieval": 2,
-    "tool_comparison": 2,
+    "postmortem": 2,
     "opensource_tool": 2,
-    # Tier 3: Macro / infrastructure
+    # Tier 3: BUILD — building/training/deploying AI (kept but last)
     "enterprise_arch": 3,
-    "deploy_finetune": 3,
     "ai_vertical": 3,
-    # Novelty: separate section
+    "deploy_finetune": 3,     # training / fine-tuning / quantization / serving
+    # Novelty: separate section, last
     "novelty": 0,
+}
+
+# Fixed, deterministic section order for report/video rendering. Sections
+# always appear in THIS order regardless of item count or score, so the
+# core "using-AI" sections are always on top and build/training is always
+# last. Within a section, items are still sorted by score.
+CATEGORY_ORDER = [
+    # — Core: best practice for using AI —
+    "personal_workflow",
+    "prompt_agent",
+    "tool_comparison",
+    "personal_exp",
+    # — Practice: adjacent hands-on —
+    "team_process",
+    "rag_retrieval",
+    "postmortem",
+    "opensource_tool",
+    # — Build: how AI is made (kept, ranked last) —
+    "enterprise_arch",
+    "ai_vertical",
+    "deploy_finetune",
+    # — Novelty —
+    "novelty",
+]
+
+# Tier-level score multipliers — applied after weighted sum in compute_total_score
+TIER_SCORE_MULTIPLIER = {
+    1: 1.0,
+    2: 0.92,   # adjacent practice slightly below core using-AI content
+    3: 0.78,   # build/train/deploy ranks well below "how to use AI"
+    0: 0.75,   # novelty ranks lowest
+}
+
+# Source-level score multipliers — applied after the weighted sum in
+# compute_total_score. Bilibili is dominated by Chinese re-uploads /
+# commentary of English-origin AI news (secondary content); its hype-y
+# clickbait titles inflate the LLM quality dimensions while the videos
+# carry modest original engineering value. Dampen the whole source so a
+# second-hand reaction video cannot outrank the primary source it covers.
+SOURCE_SCORE_MULTIPLIER = {
+    "bilibili": 0.80,
 }
 
 SCORE_WEIGHTS = {
@@ -63,12 +113,20 @@ SOURCE_CREDIBILITY_DEFAULTS = {
     "twitter": 0.5,
     "bilibili": 0.3,
     "youtube": 0.4,
+    "media": 0.6,
+    "linkedin": 0.5,
 }
 
 FILTER_PROMPT = """你是一个 AI 工程实践内容筛选、分类与评分器。
 
 ## 你的目标
-找出「有人用 AI 解决了真实问题」的经验分享，归入类别，并打分。
+找出「**如何最好地使用 AI**」的实用经验——重点是帮助一线开发者/团队**用 AI 提升生产力**、**选对模型**、**用好工具与 Agent**。这是一份「best practice for USING AI」的精选，不是「如何构建/训练 AI」的合集。
+
+## 内容优先级（决定分类与打分倾向）
+- **最高价值（核心）**：AI 工具实战用法与工作流（Claude Code/Cursor/Copilot 等）、模型选型与对比（什么场景用哪个模型）、Prompt/Agent 工程、用 AI 提效的真实经验与踩坑。
+- **次要**：团队流程、RAG/检索、复盘、开源工具实测。
+- **最低（保留但排最后）**：从零训练模型、fine-tuning、量化、推理优化、企业基础设施、垂直行业落地——这些是「构建 AI」，对「用 AI 提效」帮助有限。
+- 判断锚点：读者是「想更好地用 AI 干活的开发者」。内容能直接帮他用 AI 提效 → 核心；只是讲怎么造模型/训模型 → 归 deploy_finetune（最低优先级），不要错放进 personal_exp / personal_workflow。
 
 ## 通过标准（必须同时满足至少两条）
 - 有具体场景：某人/团队用 AI 做了什么具体的事
@@ -94,18 +152,22 @@ FILTER_PROMPT = """你是一个 AI 工程实践内容筛选、分类与评分器
 
 ## 分类体系（共 12 类）
 
-**正经工程实践（Tier 1-3）：**
-- enterprise_arch: 公司架构层面 — 企业级 AI 系统设计、基础设施选型、大规模部署
-- personal_exp: 个人使用经验 — 个人用 AI 工具的心得、踩坑、反直觉发现
-- personal_workflow: 个人实践工作流 — 完整的工作流分享、效率提升方法、工具链组合
-- postmortem: 故障/踩坑复盘 — 失败案例、Bug 分析、事故复盘、教训总结
-- tool_comparison: 工具对比评测 — 有深度实测数据的工具对比（非泛泛 A vs B）
+**核心：如何最好地使用 AI（最高优先级）**
+- personal_workflow: AI 工具用法与工作流 — Claude Code/Cursor/Copilot 等工具的实战用法、提效工作流、工具链组合
 - prompt_agent: Prompt/Agent 工程 — prompt 设计、agent 编排、tool use 的实操技巧
-- deploy_finetune: 模型部署/微调 — 本地部署、fine-tuning、量化、推理优化实战
-- rag_retrieval: RAG/检索系统 — 向量库、检索增强生成、embedding 的工程实践
-- ai_vertical: AI+垂直行业 — AI 在医疗/金融/法律/教育/制造等领域的真实落地
-- opensource_tool: 开源项目/工具 — 值得关注的新开源项目实测、源码解析
+- tool_comparison: 模型/工具选型对比 — 有深度实测的模型能力对比、什么场景用哪个模型/工具（非泛泛 A vs B）
+- personal_exp: 生产力提升经验 — 个人用 AI 提效的心得、踩坑、反直觉发现（注意：从零训练/微调模型不属于此类，归 deploy_finetune）
+
+**实践：相邻动手工程（次要）**
 - team_process: 团队协作/流程 — AI 融入团队开发流程、code review、CI/CD
+- rag_retrieval: RAG/检索系统 — 向量库、检索增强生成、embedding 的工程实践
+- postmortem: 故障/踩坑复盘 — 失败案例、Bug 分析、事故复盘、教训总结
+- opensource_tool: 开源项目/工具 — 值得关注的新开源项目实测、源码解析
+
+**构建：如何造/训 AI（保留但最低优先级，永远排最后）**
+- enterprise_arch: 企业架构 — 企业级 AI 系统设计、基础设施选型、大规模部署
+- ai_vertical: AI+垂直行业 — AI 在医疗/金融/法律/教育/制造等领域的真实落地
+- deploy_finetune: 模型部署/微调/训练 — 从零训练模型、fine-tuning、量化、推理优化、本地部署实战（凡是「怎么造/训模型」一律归这里）
 
 **花边（单独板块）：**
 - novelty: 花边/创意实验 — 有趣但非工程实践：概念验证、创意 demo、游戏模拟、艺术项目。标准：确实用了 AI 做了有趣的事，但不包含可复用的工程经验。例如"20个AI agent在中世纪自主交易"、"AI 画梵高风格"、"用 GPT 玩 DnD"。

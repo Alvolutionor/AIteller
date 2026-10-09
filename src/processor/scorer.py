@@ -9,7 +9,10 @@ import re
 import logging
 from datetime import datetime, timezone
 from src.collectors.base import RawItem
-from src.prompts.filter import SCORE_WEIGHTS, SOURCE_CREDIBILITY_DEFAULTS
+from src.prompts.filter import (
+    SCORE_WEIGHTS, SOURCE_CREDIBILITY_DEFAULTS, TIER_MAP, TIER_SCORE_MULTIPLIER,
+    SOURCE_SCORE_MULTIPLIER,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -129,9 +132,12 @@ class DeterministicScorer:
     def _engagement_bilibili(self, m: dict) -> float:
         views = m.get("views") or m.get("play") or 0
         likes = m.get("likes") or 0
-        # Bilibili: 1K views = decent for niche, 10K = popular
-        view_score = min(1.0, math.log10(max(1, views)) / 4.0)
-        like_score = min(0.5, math.log10(max(1, likes)) / 3.0)
+        # Bilibili view counts are inflated by autoplay and the source skews
+        # heavily toward re-uploads/commentary. Normalize conservatively so
+        # only genuinely popular videos approach the top: ~1M views → 1.0,
+        # 10K → 0.67, 3K → 0.59, 1K → 0.5. Likes capped lower too.
+        view_score = min(1.0, math.log10(max(1, views)) / 6.0)
+        like_score = min(0.4, math.log10(max(1, likes)) / 4.0)
         return min(1.0, view_score * 0.6 + like_score * 0.4)
 
     def _engagement_hf(self, m: dict) -> float:
@@ -293,7 +299,20 @@ class DeterministicScorer:
         return min(1.0, math.log10(max(1, heat)) / divisor)
 
 
-def compute_total_score(breakdown: dict[str, float]) -> float:
-    """Compute weighted total score (0-10) from all dimensions."""
+def compute_total_score(breakdown: dict[str, float], category: str = "",
+                        source: str = "") -> float:
+    """Compute weighted total score (0-10) from all dimensions.
+
+    Applies a tier-based multiplier (tier3/novelty scaled down) and a
+    source-based multiplier (secondary sources like bilibili scaled down)
+    so a second-hand reaction video cannot outrank the primary source it
+    covers at equal raw quality.
+    """
     total = sum(breakdown.get(k, 0.0) * w for k, w in SCORE_WEIGHTS.items())
-    return round(min(10.0, max(0.0, total * 10)), 2)
+    score = total * 10
+    if category:
+        tier = TIER_MAP.get(category, 3)
+        score *= TIER_SCORE_MULTIPLIER.get(tier, 1.0)
+    if source:
+        score *= SOURCE_SCORE_MULTIPLIER.get(source, 1.0)
+    return round(min(10.0, max(0.0, score)), 2)

@@ -113,6 +113,24 @@ class Database:
             row = await cursor.fetchone()
         return dict(row) if row else None
 
+    async def get_processed_raw_ids(self, since: datetime | None = None) -> set[int]:
+        """Return the set of raw_item_ids that already have a row in
+        processed_items. Used to skip already-processed items when
+        resuming an interrupted rescore."""
+        if since is None:
+            sql = "SELECT raw_item_id FROM processed_items"
+            args: tuple = ()
+        else:
+            sql = ("SELECT pi.raw_item_id FROM processed_items pi "
+                   "JOIN raw_items ri ON pi.raw_item_id = ri.id "
+                   "WHERE ri.collected_at >= ?")
+            args = (since.isoformat(),)
+        out: set[int] = set()
+        async with self._conn.execute(sql, args) as cursor:
+            for row in await cursor.fetchall():
+                out.add(row["raw_item_id"])
+        return out
+
     async def get_recent_raw_items(self, since: datetime) -> list[dict]:
         async with self._conn.execute(
             "SELECT * FROM raw_items WHERE collected_at >= ? ORDER BY published_at DESC",
@@ -397,17 +415,19 @@ class Database:
             await self._conn.execute("DELETE FROM scores")
         await self._conn.commit()
 
-    async def get_weekly_raw_counts(self, since: datetime) -> dict[str, int]:
+    async def get_weekly_raw_counts(self, since: datetime, until: datetime | None = None) -> dict[str, int]:
         """Get raw item counts per source since a given date (before filtering)."""
+        until_s = until.isoformat() if until else None
         async with self._conn.execute(
-            "SELECT source, COUNT(*) as cnt FROM raw_items WHERE collected_at >= ? GROUP BY source",
-            (since.isoformat(),),
+            "SELECT source, COUNT(*) as cnt FROM raw_items WHERE collected_at >= ? AND (? IS NULL OR collected_at <= ?) GROUP BY source",
+            (since.isoformat(), until_s, until_s),
         ) as cursor:
             rows = await cursor.fetchall()
         return {row["source"]: row["cnt"] for row in rows}
 
-    async def get_weekly_items(self, since: datetime) -> list[dict]:
+    async def get_weekly_items(self, since: datetime, until: datetime | None = None) -> list[dict]:
         """Get all processed+passed items since a given date, with raw item data joined."""
+        until_s = until.isoformat() if until else None
         async with self._conn.execute(
             """SELECT p.*, r.source, r.title, r.url, r.author, r.published_at,
                       r.content, r.metadata
@@ -415,8 +435,9 @@ class Database:
                JOIN raw_items r ON p.raw_item_id = r.id
                WHERE p.passed_filter = 1
                  AND r.collected_at >= ?
+                 AND (? IS NULL OR r.collected_at <= ?)
                ORDER BY r.source, p.score_total DESC""",
-            (since.isoformat(),),
+            (since.isoformat(), until_s, until_s),
         ) as cursor:
             rows = await cursor.fetchall()
         return [dict(r) for r in rows]

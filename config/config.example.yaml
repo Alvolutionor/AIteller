@@ -45,6 +45,21 @@ sources:
       - ClaudeAI
       - ChatGPT
     min_score: 20
+    # ── Rate limiting (slow-but-unbanned; tuned to avoid HTTP 429) ──
+    inter_sub_min: 8.0          # min seconds between subreddits
+    inter_sub_max: 15.0         # max seconds between subreddits
+    inter_sort_min: 3.0         # min seconds between sort orders within a sub
+    inter_sort_max: 7.0         # max seconds between sort orders within a sub
+    long_pause_every: 5         # take a long break every N subreddits (0=off)
+    long_pause_min: 30.0
+    long_pause_max: 60.0
+    rss_max_retries: 5          # retry budget per RSS fetch (honors Retry-After)
+    circuit_breaker_after: 3    # stop run after N consecutive sub failures
+    # Per-subreddit resume checkpoint. Default: <db_dir>/reddit_progress.json.
+    # A killed run resumes here, skipping subs already done (no re-fired
+    # requests); the file auto-expires when a new weekly window opens.
+    # Set to "" to disable checkpointing.
+    # progress_file: "./data/reddit_progress.json"
   github_trending:
     enabled: true
     languages: ["python", "typescript", "rust"]
@@ -96,6 +111,28 @@ notification:
 
 report:
   output_dir: "./data/reports"
+
+audio:
+  enabled: true
+  voices:
+    zh: "zh-CN-YunxiNeural"
+    en: "en-US-GuyNeural"
+  script:
+    highlight_count: 5
+    tier1_max_items: 15
+  output:
+    audio_dir: "./output/weekly/audio"
+    video_dir: "./output/weekly/video"
+  video:
+    resolution: [1920, 1080]
+    bg_color_start: "#1a1a2e"
+    bg_color_end: "#16213e"
+    accent_color: "#e94560"
+  upload:
+    targets:
+      - bilibili
+      - youtube
+    tags: ["AI", "LLM", "weekly", "engineering practice"]
 
 storage:
   db_path: "./data/aiteller.db"

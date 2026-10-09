@@ -12,8 +12,11 @@ import aiohttp
 
 logger = logging.getLogger(__name__)
 
-# Status codes that warrant automatic retry with backoff
-_RETRY_STATUS = {429, 403, 503, 502, 500}
+# Status codes that warrant automatic retry with backoff.
+# 403 deliberately excluded: most 403s are policy blocks (rate-limit
+# pool, captcha challenge, geo-block) where retrying just makes it worse.
+# Collectors that want 403-as-retry can override.
+_RETRY_STATUS = {429, 503, 502, 500}
 
 
 @dataclass
@@ -49,18 +52,50 @@ class BaseCollector(ABC):
             await asyncio.sleep(wait)
         self._last_request_time = time.monotonic()
 
-    async def _backoff(self, attempt: int, url: str, status: int):
-        """Exponential backoff with jitter on rate limit / server error."""
-        base = min(2 ** attempt * 5, 120)  # 5s, 10s, 20s, 40s, ... up to 120s
-        jitter = random.uniform(0, base * 0.3)
-        wait = base + jitter
-        logger.warning("%s: HTTP %d from %s — backing off %.0fs (attempt %d)",
-                       self.__class__.__name__, status, url[:80], wait, attempt + 1)
+    @staticmethod
+    def _parse_retry_after(value: str | None) -> float | None:
+        """Parse a Retry-After header into seconds. Supports the delta-seconds
+        form (e.g. "5"); HTTP-date form is rare here and treated as absent."""
+        if not value:
+            return None
+        try:
+            secs = float(value.strip())
+            return secs if secs >= 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    async def _backoff(self, attempt: int, url: str, status: int,
+                       retry_after: float | None = None):
+        """Exponential backoff with jitter on rate limit / server error.
+
+        If the server sent a Retry-After we honor it (clamped to a sane
+        ceiling), since that is the host telling us exactly how long to
+        wait — much better than guessing. Otherwise fall back to
+        exponential backoff with jitter.
+        """
+        if retry_after is not None:
+            wait = min(retry_after, 300) + random.uniform(0, 2)
+            logger.warning("%s: HTTP %d from %s — honoring Retry-After, "
+                           "waiting %.0fs (attempt %d)",
+                           self.__class__.__name__, status, url[:80], wait, attempt + 1)
+        else:
+            base = min(2 ** attempt * 5, 120)  # 5s, 10s, 20s, 40s, ... up to 120s
+            jitter = random.uniform(0, base * 0.3)
+            wait = base + jitter
+            logger.warning("%s: HTTP %d from %s — backing off %.0fs (attempt %d)",
+                           self.__class__.__name__, status, url[:80], wait, attempt + 1)
         await asyncio.sleep(wait)
 
     async def _fetch_json(self, session: aiohttp.ClientSession, url: str,
-                          max_retries: int = 3, **kwargs) -> dict:
-        """Fetch JSON with rate limiting, retry on 429/5xx, fail on 4xx."""
+                          max_retries: int = 3, loose_mime: bool = False,
+                          **kwargs) -> dict:
+        """Fetch JSON with rate limiting, retry on 429/5xx, fail on 4xx.
+
+        loose_mime=True skips aiohttp's strict Content-Type check (use when the
+        server returns valid JSON under text/plain, text/javascript, etc. — but
+        also means an HTML risk-control page will surface as a JSONDecodeError
+        instead of a mimetype error).
+        """
         for attempt in range(max_retries):
             await self._rate_limit()
             try:
@@ -68,11 +103,13 @@ class BaseCollector(ABC):
                                        **kwargs) as resp:
                     if resp.status == 200:
                         self._consecutive_errors = 0
-                        return await resp.json()
+                        return await resp.json(content_type=None if loose_mime else "application/json")
 
                     if resp.status in _RETRY_STATUS:
                         self._consecutive_errors += 1
-                        await self._backoff(attempt, url, resp.status)
+                        retry_after = self._parse_retry_after(
+                            resp.headers.get("Retry-After"))
+                        await self._backoff(attempt, url, resp.status, retry_after)
                         continue
 
                     # Non-retryable error (404, 403, etc.)
@@ -115,7 +152,9 @@ class BaseCollector(ABC):
 
                     if resp.status in _RETRY_STATUS:
                         self._consecutive_errors += 1
-                        await self._backoff(attempt, url, resp.status)
+                        retry_after = self._parse_retry_after(
+                            resp.headers.get("Retry-After"))
+                        await self._backoff(attempt, url, resp.status, retry_after)
                         continue
 
                     text = await resp.text()

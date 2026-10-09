@@ -79,7 +79,8 @@ class LLMClient:
         cfg = cfg_map.get(provider, {})
         return cfg.get("fast_model") if tier == "fast" else cfg.get("standard_model", "")
 
-    async def complete(self, prompt: str, model_tier: str = "standard") -> str:
+    async def complete(self, prompt: str, model_tier: str = "standard",
+                       max_tokens: int | None = None) -> str:
         if self.dry_run:
             return f"[DRY RUN] Mock response for: {prompt[:50]}..."
 
@@ -87,39 +88,40 @@ class LLMClient:
             raise RuntimeError("Daily token budget exhausted")
 
         try:
-            return await self._call_provider(self.primary, prompt, model_tier)
+            return await self._call_provider(self.primary, prompt, model_tier, max_tokens)
         except Exception as primary_exc:
             logger.warning("Primary (%s) failed: %s, falling back to %s",
                            self.primary, type(primary_exc).__name__, self.fallback)
             try:
-                return await self._call_provider(self.fallback, prompt, model_tier)
+                return await self._call_provider(self.fallback, prompt, model_tier, max_tokens)
             except Exception as fallback_exc:
                 raise RuntimeError(
                     f"Both providers failed. Primary ({self.primary}): {primary_exc}. "
                     f"Fallback ({self.fallback}): {fallback_exc}"
                 ) from fallback_exc
 
-    async def _call_provider(self, provider: str, prompt: str, tier: str) -> str:
+    async def _call_provider(self, provider: str, prompt: str, tier: str,
+                             max_tokens: int | None = None) -> str:
         if provider == "claude":
-            return await self._call_claude(prompt, tier)
+            return await self._call_claude(prompt, tier, max_tokens)
         elif provider == "claude_cli":
             return await self._call_claude_cli(prompt, tier)
         elif provider == "claude_proxy":
-            return await self._call_openai_compat(self._claude_proxy, "claude_proxy", prompt, tier)
+            return await self._call_openai_compat(self._claude_proxy, "claude_proxy", prompt, tier, max_tokens)
         elif provider == "deepseek":
-            return await self._call_openai_compat(self._deepseek, "deepseek", prompt, tier)
+            return await self._call_openai_compat(self._deepseek, "deepseek", prompt, tier, max_tokens)
         elif provider == "local":
-            return await self._call_openai_compat(self._local, "local", prompt, tier)
+            return await self._call_openai_compat(self._local, "local", prompt, tier, max_tokens)
         else:
-            return await self._call_openai_compat(self._openai, "openai", prompt, tier)
+            return await self._call_openai_compat(self._openai, "openai", prompt, tier, max_tokens)
 
-    async def _call_claude(self, prompt: str, tier: str) -> str:
+    async def _call_claude(self, prompt: str, tier: str, max_tokens: int | None = None) -> str:
         if self._claude is None:
             raise RuntimeError("Claude client not configured (missing api_key)")
         model = self._get_model("claude", tier)
         response = await self._claude.messages.create(
             model=model,
-            max_tokens=4096,
+            max_tokens=max_tokens or 4096,
             messages=[{"role": "user", "content": prompt}],
         )
         tokens = response.usage.input_tokens + response.usage.output_tokens
@@ -168,14 +170,15 @@ class LLMClient:
         finally:
             os.unlink(prompt_file)
 
-    async def _call_openai_compat(self, client, provider_name: str, prompt: str, tier: str) -> str:
+    async def _call_openai_compat(self, client, provider_name: str, prompt: str, tier: str,
+                                  max_tokens: int | None = None) -> str:
         if client is None:
             raise RuntimeError(f"{provider_name} client not configured")
         model = self._get_model(provider_name, tier)
         response = await client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
+            max_tokens=max_tokens or 4096,
         )
         tokens = (response.usage.prompt_tokens + response.usage.completion_tokens) if response.usage else 0
         self._tokens_used += tokens

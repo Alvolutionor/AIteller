@@ -20,6 +20,9 @@ dependencies = [
     "fpdf2>=2.8.0",
     "deep-translator>=1.11.4",
     "yt-dlp>=2026.3.17",
+    "edge-tts>=6.1.0",
+    "Pillow>=10.0.0",
+    "bilibili-api-python>=17.4.1",
 ]
 
 [dependency-groups]
